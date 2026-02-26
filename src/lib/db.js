@@ -10,6 +10,48 @@ const KEYS = {
     INGREDIENTS: 'ingredients',
     MENUS: 'menus',
     CATEGORIES: 'categories',
+    MENU_CATEGORIES: 'menuCategories',
+};
+
+// --- Menus ---
+export const getMenus = async () => {
+    const data = await localforage.getItem(KEYS.MENUS);
+    return data || [];
+};
+
+export const saveMenus = async (menus) => {
+    await localforage.setItem(KEYS.MENUS, menus);
+};
+
+export const addMenu = async (menu) => {
+    const menus = await getMenus();
+    const newMenu = {
+        ...menu,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+    };
+    await saveMenus([...menus, newMenu]);
+    return newMenu;
+};
+
+export const updateMenu = async (id, updates) => {
+    const menus = await getMenus();
+    const index = menus.findIndex((m) => m.id === id);
+    if (index !== -1) {
+        menus[index] = {
+            ...menus[index],
+            ...updates,
+            updatedAt: new Date().toISOString()
+        };
+        await saveMenus(menus);
+        return menus[index];
+    }
+    return null;
+};
+
+export const deleteMenu = async (id) => {
+    const menus = await getMenus();
+    await saveMenus(menus.filter((m) => m.id !== id));
 };
 
 // --- Categories ---
@@ -58,6 +100,54 @@ export const updateCategory = async (id, name) => {
 export const deleteCategory = async (id) => {
     const categories = await getCategories();
     await saveCategories(categories.filter((c) => c.id !== id));
+};
+
+// --- Menu Categories ---
+export const getMenuCategories = async () => {
+    const data = await localforage.getItem(KEYS.MENU_CATEGORIES);
+    // Default menu categories if empty
+    if (!data || data.length === 0) {
+        const defaultMenuCategories = [
+            { id: 'mcat-1', name: 'メイン', createdAt: new Date().toISOString() },
+            { id: 'mcat-2', name: 'サイド', createdAt: new Date().toISOString() },
+            { id: 'mcat-3', name: 'ドリンク', createdAt: new Date().toISOString() },
+            { id: 'mcat-4', name: 'その他', createdAt: new Date().toISOString() },
+        ];
+        await saveMenuCategories(defaultMenuCategories);
+        return defaultMenuCategories;
+    }
+    return data;
+};
+
+export const saveMenuCategories = async (categories) => {
+    await localforage.setItem(KEYS.MENU_CATEGORIES, categories);
+};
+
+export const addMenuCategory = async (name) => {
+    const categories = await getMenuCategories();
+    const newCategory = {
+        id: crypto.randomUUID(),
+        name,
+        createdAt: new Date().toISOString(),
+    };
+    await saveMenuCategories([...categories, newCategory]);
+    return newCategory;
+};
+
+export const updateMenuCategory = async (id, name) => {
+    const categories = await getMenuCategories();
+    const index = categories.findIndex((c) => c.id === id);
+    if (index !== -1) {
+        categories[index] = { ...categories[index], name };
+        await saveMenuCategories(categories);
+        return categories[index];
+    }
+    return null;
+};
+
+export const deleteMenuCategory = async (id) => {
+    const categories = await getMenuCategories();
+    await saveMenuCategories(categories.filter((c) => c.id !== id));
 };
 
 // --- Ingredients ---

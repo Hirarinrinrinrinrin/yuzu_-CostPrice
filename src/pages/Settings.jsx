@@ -1,29 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, Save, X } from 'lucide-react';
-import { getCategories, addCategory, updateCategory, deleteCategory } from '../lib/db';
+import {
+    getCategories, addCategory, updateCategory, deleteCategory,
+    getMenuCategories, addMenuCategory, updateMenuCategory, deleteMenuCategory
+} from '../lib/db';
 
 const Settings = () => {
+    // 食材カテゴリー
     const [categories, setCategories] = useState([]);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
 
+    // メニューカテゴリー
+    const [menuCategories, setMenuCategories] = useState([]);
+    const [newMenuCategoryName, setNewMenuCategoryName] = useState('');
+    const [editingMenuId, setEditingMenuId] = useState(null);
+    const [editMenuName, setEditMenuName] = useState('');
+
     useEffect(() => {
-        loadCategories();
+        loadData();
     }, []);
 
-    const loadCategories = async () => {
-        const data = await getCategories();
-        setCategories(data);
+    const loadData = async () => {
+        const [cats, menuCats] = await Promise.all([
+            getCategories(),
+            getMenuCategories()
+        ]);
+        setCategories(cats);
+        setMenuCategories(menuCats);
     };
 
+    // --- 食材カテゴリー処理 ---
     const handleAddCategory = async (e) => {
         e.preventDefault();
         if (!newCategoryName.trim()) return;
 
         await addCategory(newCategoryName.trim());
         setNewCategoryName('');
-        loadCategories();
+        loadData();
     };
 
     const startEdit = (category) => {
@@ -40,13 +55,47 @@ const Settings = () => {
         if (!editName.trim()) return;
         await updateCategory(editingId, editName.trim());
         setEditingId(null);
-        loadCategories();
+        loadData();
     };
 
     const handleDelete = async (id, name) => {
         if (window.confirm(`カテゴリー「${name}」を削除してもよろしいですか？\n※このカテゴリーが設定されている食材からはカテゴリーが外れます。`)) {
             await deleteCategory(id);
-            loadCategories();
+            loadData();
+        }
+    };
+
+    // --- メニューカテゴリー処理 ---
+    const handleAddMenuCategory = async (e) => {
+        e.preventDefault();
+        if (!newMenuCategoryName.trim()) return;
+
+        await addMenuCategory(newMenuCategoryName.trim());
+        setNewMenuCategoryName('');
+        loadData();
+    };
+
+    const startEditMenu = (category) => {
+        setEditingMenuId(category.id);
+        setEditMenuName(category.name);
+    };
+
+    const cancelEditMenu = () => {
+        setEditingMenuId(null);
+        setEditMenuName('');
+    };
+
+    const handleSaveEditMenu = async () => {
+        if (!editMenuName.trim()) return;
+        await updateMenuCategory(editingMenuId, editMenuName.trim());
+        setEditingMenuId(null);
+        loadData();
+    };
+
+    const handleDeleteMenu = async (id, name) => {
+        if (window.confirm(`メニューカテゴリー「${name}」を削除してもよろしいですか？`)) {
+            await deleteMenuCategory(id);
+            loadData();
         }
     };
 
@@ -137,6 +186,89 @@ const Settings = () => {
                             ))}
                             {categories.length === 0 && (
                                 <p className="text-center text-stone-500 py-4">カテゴリーが登録されていません。</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* --- メニューカテゴリー管理UI --- */}
+                <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-stone-100 bg-theme-sidebar/30">
+                        <h2 className="font-bold text-stone-800 flex items-center">
+                            メニューカテゴリー管理
+                        </h2>
+                    </div>
+
+                    <div className="p-6">
+                        <form onSubmit={handleAddMenuCategory} className="flex gap-2 mb-6">
+                            <input
+                                type="text"
+                                value={newMenuCategoryName}
+                                onChange={(e) => setNewMenuCategoryName(e.target.value)}
+                                placeholder="新しいカテゴリー名を追加"
+                                className="flex-1 rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2.5 border bg-white"
+                            />
+                            <button
+                                type="submit"
+                                disabled={!newMenuCategoryName.trim()}
+                                className="flex items-center bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
+                            >
+                                <Plus size={18} className="mr-1" />
+                                追加
+                            </button>
+                        </form>
+
+                        <div className="space-y-2">
+                            {menuCategories.map((category) => (
+                                <div
+                                    key={category.id}
+                                    className="flex items-center justify-between p-3 rounded-xl border border-stone-100 hover:border-orange-200 hover:bg-orange-50/50 transition-colors group"
+                                >
+                                    {editingMenuId === category.id ? (
+                                        <div className="flex flex-1 items-center gap-2 mr-2">
+                                            <input
+                                                type="text"
+                                                value={editMenuName}
+                                                onChange={(e) => setEditMenuName(e.target.value)}
+                                                className="flex-1 rounded-md border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-1.5 border bg-white"
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={handleSaveEditMenu}
+                                                className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-md transition-colors"
+                                            >
+                                                <Save size={18} />
+                                            </button>
+                                            <button
+                                                onClick={cancelEditMenu}
+                                                className="p-1.5 text-stone-400 hover:bg-stone-200 rounded-md transition-colors"
+                                            >
+                                                <X size={18} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <span className="font-medium text-stone-700">{category.name}</span>
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => startEditMenu(category)}
+                                                    className="p-2 text-stone-400 hover:text-orange-500 hover:bg-orange-100 rounded-lg transition-colors"
+                                                >
+                                                    <Edit2 size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteMenu(category.id, category.name)}
+                                                    className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                            {menuCategories.length === 0 && (
+                                <p className="text-center text-stone-500 py-4">メニューカテゴリーが登録されていません。</p>
                             )}
                         </div>
                     </div>

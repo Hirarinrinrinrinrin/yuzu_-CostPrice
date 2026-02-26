@@ -18,23 +18,30 @@ const IngredientForm = ({ initialData, onSave, onCancel }) => {
         const loadCategories = async () => {
             const cats = await getCategories();
             setCategories(cats);
-            // If no initialData (new ingredient) and categories are loaded, set default categoryId
-            if (!initialData && cats.length > 0) {
-                setFormData(prev => ({ ...prev, categoryId: cats[0].id }));
-            }
         };
         loadCategories();
+    }, []);
 
+    useEffect(() => {
         if (initialData) {
-            setFormData({
+            setFormData(prev => ({
+                ...prev,
                 name: initialData.name,
                 price: initialData.price,
                 capacity: initialData.capacity,
                 unit: initialData.unit,
                 categoryId: initialData.categoryId || (categories.length > 0 ? categories[0].id : ''),
+            }));
+        } else if (categories.length > 0) {
+            // 新規作成時、categoryIdが空の場合のみ初期値を設定
+            setFormData(prev => {
+                if (!prev.categoryId) {
+                    return { ...prev, categoryId: categories[0].id };
+                }
+                return prev;
             });
         }
-    }, [initialData, categories]); // Added categories to dependency array because it's used in initialData logic
+    }, [initialData, categories]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
