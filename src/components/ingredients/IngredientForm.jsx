@@ -24,6 +24,7 @@ const IngredientForm = ({ initialData, onSave, onCancel }) => {
 
     useEffect(() => {
         if (initialData) {
+            // eslint-disable-next-line
             setFormData(prev => ({
                 ...prev,
                 name: initialData.name,

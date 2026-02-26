@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Utensils, Image as ImageIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, Utensils, Image as ImageIcon, Copy } from 'lucide-react';
 import { getMenus, addMenu, updateMenu, deleteMenu, getIngredients, getMenuCategories } from '../lib/db';
 import MenuForm from '../components/menus/MenuForm';
 
@@ -11,11 +11,7 @@ const Menus = () => {
     const [editingItem, setEditingItem] = useState(null);
     const [activeTab, setActiveTab] = useState('すべて');
 
-    useEffect(() => {
-        loadData();
-    }, []);
-
-    const loadData = async () => {
+    async function loadData() {
         const [menuData, ingData, mCatsData] = await Promise.all([
             getMenus(),
             getIngredients(),
@@ -24,7 +20,12 @@ const Menus = () => {
         setMenus(menuData);
         setIngredients(ingData);
         setMenuCategories(mCatsData);
-    };
+    }
+
+    useEffect(() => {
+        // eslint-disable-next-line
+        loadData();
+    }, []);
 
     const TABS = ['すべて', ...menuCategories.map(c => c.name)];
 
@@ -43,6 +44,18 @@ const Menus = () => {
     const handleEdit = (item) => {
         setEditingItem(item);
         setIsFormOpen(true);
+    };
+
+    const handleDuplicate = async (item) => {
+        if (window.confirm(`「${item.name}」を複製しますか？`)) {
+            const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...menuDataToCopy } = item;
+            const duplicatedMenuData = {
+                ...menuDataToCopy,
+                name: `${item.name} - コピー`
+            };
+            await addMenu(duplicatedMenuData);
+            loadData();
+        }
     };
 
     const handleDelete = async (id, name) => {
@@ -65,9 +78,18 @@ const Menus = () => {
             return sum + (unitPrice * item.usedAmount);
         }, 0);
 
-        const costRate = menu.sellingPrice > 0 ? (totalCost / menu.sellingPrice) * 100 : 0;
+        let displayCost = totalCost;
+        if (menu.isPortioned) {
+            if (menu.portionType === 'cut') {
+                displayCost = menu.portionAmount > 0 ? totalCost / Number(menu.portionAmount) : 0;
+            } else if (menu.portionType === 'weight') {
+                displayCost = menu.yieldAmount > 0 ? (totalCost / Number(menu.yieldAmount)) * Number(menu.portionAmount) : 0;
+            }
+        }
 
-        return { totalCost, costRate };
+        const costRate = menu.sellingPrice > 0 ? (displayCost / menu.sellingPrice) * 100 : 0;
+
+        return { totalCost: displayCost, costRate, originalTotalCost: totalCost };
     };
 
     const filteredMenus = activeTab === 'すべて'
@@ -148,12 +170,21 @@ const Menus = () => {
                                                 <button
                                                     onClick={() => handleEdit(menu)}
                                                     className="p-1.5 bg-white text-stone-500 hover:text-orange-500 rounded-md shadow-sm transition-colors"
+                                                    title="編集"
                                                 >
                                                     <Edit2 size={16} />
                                                 </button>
                                                 <button
+                                                    onClick={() => handleDuplicate(menu)}
+                                                    className="p-1.5 bg-white text-stone-500 hover:text-green-500 rounded-md shadow-sm transition-colors"
+                                                    title="複製"
+                                                >
+                                                    <Copy size={16} />
+                                                </button>
+                                                <button
                                                     onClick={() => handleDelete(menu.id, menu.name)}
                                                     className="p-1.5 bg-white text-stone-500 hover:text-red-500 rounded-md shadow-sm transition-colors"
+                                                    title="削除"
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>
@@ -167,7 +198,17 @@ const Menus = () => {
 
                                         <div className="p-5 flex-1 flex flex-col">
                                             <h3 className="font-bold text-lg text-stone-800 mb-1 line-clamp-1">{menu.name}</h3>
-                                            <p className="text-sm text-stone-500 mb-4">{menu.ingredients.length}種類の食材を使用</p>
+                                            <p className="text-sm text-stone-500 mb-3">{menu.ingredients.length}種類の食材を使用</p>
+
+                                            {menu.isPortioned && (
+                                                <div className="mb-4">
+                                                    <span className="inline-block bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-bold border border-orange-200">
+                                                        {menu.portionType === 'cut'
+                                                            ? `${menu.portionAmount}等分（カット売り）`
+                                                            : `${menu.portionAmount}${menu.yieldUnit}単位（量り売り）`}
+                                                    </span>
+                                                </div>
+                                            )}
 
                                             <div className="mt-auto pt-4 border-t border-stone-100 grid grid-cols-2 gap-4">
                                                 <div>
@@ -175,7 +216,9 @@ const Menus = () => {
                                                     <p className="font-bold text-stone-700">¥{menu.sellingPrice.toLocaleString()}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-[10px] text-stone-400 font-medium mb-0.5">原価 / 原価率</p>
+                                                    <p className="text-[10px] text-stone-400 font-medium mb-0.5">
+                                                        {menu.isPortioned ? '販売原価 / 原価率' : '原価 / 原価率'}
+                                                    </p>
                                                     <div className="flex items-baseline gap-1.5">
                                                         <p className="font-bold text-stone-700 text-sm">¥{totalCost.toFixed(0)}</p>
                                                         <p className={`text-xs font-bold ${costRate > 35 ? 'text-red-400' : 'text-emerald-500'}`}>

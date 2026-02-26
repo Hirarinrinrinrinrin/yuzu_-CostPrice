@@ -9,20 +9,31 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
         category: defaultCategory,
         sellingPrice: '',
         image: '',
-        menuIngredients: [] // { tempId: string, ingredientId: string, usedAmount: number|string }
+        menuIngredients: [], // { tempId: string, ingredientId: string, usedAmount: number|string }
+        isPortioned: false,
+        yieldAmount: 1,
+        yieldUnit: '人前',
+        portionType: 'cut',
+        portionAmount: 1,
     });
 
     useEffect(() => {
         if (initialData) {
+            // eslint-disable-next-line
             setFormData({
                 name: initialData.name || '',
                 category: initialData.category || defaultCategory,
                 sellingPrice: initialData.sellingPrice || '',
                 image: initialData.image || '',
-                menuIngredients: initialData.ingredients.map(i => ({
+                menuIngredients: initialData.ingredients ? initialData.ingredients.map(i => ({
                     ...i,
                     tempId: crypto.randomUUID()
-                })) || []
+                })) : [],
+                isPortioned: initialData.isPortioned || false,
+                yieldAmount: initialData.yieldAmount || 1,
+                yieldUnit: initialData.yieldUnit || '人前',
+                portionType: initialData.portionType || 'cut',
+                portionAmount: initialData.portionAmount || 1,
             });
         }
     }, [initialData, defaultCategory]);
@@ -70,7 +81,7 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
         }
     };
 
-    // リアルタイム計算計算
+    // リアルタイム計算
     const totalCost = formData.menuIngredients.reduce((sum, item) => {
         const ingredient = availableIngredients.find(i => i.id === item.ingredientId);
         if (!ingredient || !item.usedAmount) return sum;
@@ -78,8 +89,18 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
         return sum + (unitPrice * Number(item.usedAmount));
     }, 0);
 
+    // 分配・量り売り計算
+    let displayCost = totalCost;
+    if (formData.isPortioned) {
+        if (formData.portionType === 'cut') {
+            displayCost = formData.portionAmount > 0 ? totalCost / Number(formData.portionAmount) : 0;
+        } else if (formData.portionType === 'weight') {
+            displayCost = formData.yieldAmount > 0 ? (totalCost / Number(formData.yieldAmount)) * Number(formData.portionAmount) : 0;
+        }
+    }
+
     const costRate = Number(formData.sellingPrice) > 0
-        ? (totalCost / Number(formData.sellingPrice)) * 100
+        ? (displayCost / Number(formData.sellingPrice)) * 100
         : 0;
 
     const handleSubmit = (e) => {
@@ -100,6 +121,11 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
             sellingPrice: Number(formData.sellingPrice) || 0,
             image: formData.image,
             ingredients: validIngredients,
+            isPortioned: formData.isPortioned,
+            yieldAmount: Number(formData.yieldAmount),
+            yieldUnit: formData.yieldUnit,
+            portionType: formData.portionType,
+            portionAmount: Number(formData.portionAmount),
         });
     };
 
@@ -119,6 +145,44 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                     {/* 左カラム：基本情報 */}
                     <div className="space-y-6">
                         <h4 className="font-medium text-stone-800 border-b border-stone-100 pb-2">基本情報</h4>
+
+                        {/* 商品画像（左上に大きく配置） */}
+                        <div>
+                            <label className="block text-sm font-medium text-stone-700 mb-2">商品画像</label>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-6">
+                                {formData.image ? (
+                                    <div className="relative w-48 h-48 rounded-2xl overflow-hidden border border-stone-200 shadow-sm flex-shrink-0">
+                                        <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
+                                            className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-2 hover:bg-black/80 transition-colors"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="w-48 h-48 rounded-2xl border-2 border-dashed border-stone-300 flex flex-col items-center justify-center text-stone-400 bg-stone-50 flex-shrink-0 hover:bg-stone-100 transition-colors">
+                                        <ImageIcon size={40} className="mb-3 opacity-40" />
+                                        <span className="text-sm font-medium">No Image</span>
+                                    </div>
+                                )}
+                                <div className="flex-1 pb-2 w-full">
+                                    <label className="block w-full text-center sm:text-left cursor-pointer">
+                                        <span className="inline-block px-4 py-2 rounded-lg bg-orange-50 text-orange-600 font-semibold text-sm hover:bg-orange-100 transition-colors border border-orange-200 shadow-sm">
+                                            画像を選択する
+                                        </span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleImageChange}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                    <p className="text-xs text-stone-400 mt-3 text-center sm:text-left">JPEG, PNG等<br className="sm:hidden" />（※端末内に保存されます）</p>
+                                </div>
+                            </div>
+                        </div>
 
                         <div>
                             <label className="block text-sm font-medium text-stone-700 mb-1">メニュー名</label>
@@ -164,36 +228,87 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                             </div>
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-stone-700 mb-1">商品画像</label>
-                            <div className="flex items-center gap-4">
-                                {formData.image ? (
-                                    <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-stone-200">
-                                        <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
-                                            className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-black/70"
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="w-24 h-24 rounded-lg border-2 border-dashed border-stone-300 flex flex-col items-center justify-center text-stone-400 bg-stone-50">
-                                        <ImageIcon size={24} className="mb-1 opacity-50" />
-                                        <span className="text-[10px]">No Image</span>
-                                    </div>
-                                )}
-                                <div className="flex-1">
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleImageChange}
-                                        className="block w-full text-sm text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100 transition-colors"
-                                    />
-                                    <p className="text-xs text-stone-400 mt-2">JPEG, PNG等の画像形式に対応（※端末内に保存されます）</p>
+                        {/* 分配・量り売り設定（トグルスイッチ） */}
+                        <div className="bg-stone-50 rounded-xl p-4 border border-stone-200 shadow-sm mt-6 mb-2">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h5 className="font-bold text-stone-800 text-sm">分配・量り売り設定</h5>
+                                    <p className="text-xs text-stone-500 mt-0.5">ホールケーキのカット売りに便利</p>
                                 </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        name="isPortioned"
+                                        checked={formData.isPortioned}
+                                        onChange={(e) => setFormData(p => ({ ...p, isPortioned: e.target.checked }))}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                                </label>
                             </div>
+
+                            {formData.isPortioned && (
+                                <div className="mt-5 space-y-4 pt-4 border-t border-stone-200 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    {/* 【Step 2】完成品の分量設定 */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-stone-700 mb-1">① 完成品の分量（全体量）</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="number"
+                                                name="yieldAmount"
+                                                min="0.1"
+                                                step="0.1"
+                                                value={formData.yieldAmount}
+                                                onChange={handleChange}
+                                                className="flex-1 rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
+                                            />
+                                            <select
+                                                name="yieldUnit"
+                                                value={formData.yieldUnit}
+                                                onChange={handleChange}
+                                                className="w-24 font-medium rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
+                                            >
+                                                {['人前', 'g', 'ml'].map(u => <option key={u} value={u}>{u}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* 【Step 3 & 4】販売形態と分割計算 */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-stone-700 mb-1">② 販売形態</label>
+                                            <select
+                                                name="portionType"
+                                                value={formData.portionType}
+                                                onChange={handleChange}
+                                                className="w-full font-medium rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
+                                            >
+                                                <option value="cut">カット等分</option>
+                                                <option value="weight">量り売り</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-stone-700 mb-1">
+                                                {formData.portionType === 'cut' ? '③ カット数（等分）' : `③ 販売単位`}
+                                            </label>
+                                            <div className="flex gap-2 items-center">
+                                                <input
+                                                    type="number"
+                                                    name="portionAmount"
+                                                    min="0.1"
+                                                    step="0.1"
+                                                    value={formData.portionAmount}
+                                                    onChange={handleChange}
+                                                    className="w-full rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
+                                                />
+                                                <span className="text-sm font-medium text-stone-500 whitespace-nowrap min-w-[24px]">
+                                                    {formData.portionType === 'cut' ? '等分' : formData.yieldUnit}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -217,7 +332,7 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                                     使用する食材を追加してください
                                 </p>
                             ) : (
-                                formData.menuIngredients.map((item, index) => {
+                                formData.menuIngredients.map((item) => {
                                     const selectedIngredient = availableIngredients.find(i => i.id === item.ingredientId);
                                     const unit = selectedIngredient ? selectedIngredient.unit : '';
                                     const cost = selectedIngredient && item.usedAmount
@@ -274,16 +389,34 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
 
                 {/* 下部：計算結果＆保存 */}
                 <div className="mt-8 pt-6 border-t border-stone-200 bg-stone-50 -mx-6 -mb-6 px-6 pb-6 rounded-b-2xl">
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-8">
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
                             <div>
-                                <div className="text-xs text-stone-500 mb-1">原価合計</div>
+                                <div className="text-xs text-stone-500 mb-1">
+                                    {formData.isPortioned ? '完成品 全体原価' : '原価合計'}
+                                </div>
                                 <div className="text-2xl font-bold text-stone-800">¥{totalCost.toFixed(2)}</div>
                             </div>
-                            <div className="h-10 w-px bg-stone-300"></div>
+
+                            {formData.isPortioned && (
+                                <>
+                                    <div className="hidden sm:block h-10 w-px bg-stone-300"></div>
+                                    <div className="bg-orange-100 rounded-lg p-2 px-3 border border-orange-200 shadow-sm">
+                                        <div className="text-[10px] text-orange-800 mb-0.5 font-bold">
+                                            {formData.portionType === 'cut'
+                                                ? `1カットあたりの原価 (${formData.portionAmount}等分)`
+                                                : `量り売り原価 (${formData.portionAmount}${formData.yieldUnit}あたり)`}
+                                        </div>
+                                        <div className="text-xl font-bold text-orange-600">¥{displayCost.toFixed(2)}</div>
+                                    </div>
+                                </>
+                            )}
+
+                            <div className="hidden sm:block h-10 w-px bg-stone-300"></div>
+
                             <div>
-                                <div className="text-xs text-stone-500 mb-1">原価率（目安: 30%）</div>
-                                <div className={`text - 2xl font - bold ${costRate > 35 ? 'text-red-500' : costRate > 0 ? 'text-emerald-500' : 'text-stone-800'} `}>
+                                <div className="text-xs text-stone-500 mb-1">仕入・原価率（目安: 30%）</div>
+                                <div className={`text-2xl font-bold ${costRate > 35 ? 'text-red-500' : costRate > 0 ? 'text-emerald-500' : 'text-stone-800'}`}>
                                     {costRate > 0 ? costRate.toFixed(1) : '---'}%
                                 </div>
                             </div>
