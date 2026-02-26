@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import MainLayout from './components/layout/MainLayout'
 import Ingredients from './pages/Ingredients'
 import Menus from './pages/Menus'
+import Settings from './pages/Settings'
 
 function App() {
   return (
@@ -11,7 +12,7 @@ function App() {
           <Route index element={<Navigate to="/menus" replace />} />
           <Route path="ingredients" element={<Ingredients />} />
           <Route path="menus" element={<Menus />} />
-          <Route path="settings" element={<div className="p-4 lg:p-8"><div className="max-w-5xl mx-auto"><h1 className="text-2xl font-bold text-stone-800">設定</h1></div></div>} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>
