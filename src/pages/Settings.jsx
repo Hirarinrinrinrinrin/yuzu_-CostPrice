@@ -1,10 +1,93 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Save, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, GripVertical } from 'lucide-react';
 import {
-    getCategories, addCategory, updateCategory, deleteCategory,
-    getMenuCategories, addMenuCategory, updateMenuCategory, deleteMenuCategory
+    getCategories, addCategory, updateCategory, deleteCategory, saveCategories,
+    getMenuCategories, addMenuCategory, updateMenuCategory, deleteMenuCategory, saveMenuCategories
 } from '../lib/db';
+import {
+    DndContext,
+    closestCenter,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+    arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
+// ---- ドラッグ可能なカテゴリー行コンポーネント ----
+const SortableCategoryRow = ({ category, editingId, editName, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onEditNameChange }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: category.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        zIndex: isDragging ? 10 : 'auto',
+    };
+
+    const isEditing = editingId === category.id;
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className="flex items-center justify-between p-3 rounded-xl border border-stone-100 hover:border-orange-200 hover:bg-orange-50/50 transition-colors group bg-white"
+        >
+            {isEditing ? (
+                <div className="flex flex-1 items-center gap-2 mr-2">
+                    <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => onEditNameChange(e.target.value)}
+                        className="flex-1 rounded-md border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-1.5 border bg-white"
+                        autoFocus
+                    />
+                    <button onClick={onSaveEdit} className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-md transition-colors">
+                        <Save size={18} />
+                    </button>
+                    <button onClick={onCancelEdit} className="p-1.5 text-stone-400 hover:bg-stone-200 rounded-md transition-colors">
+                        <X size={18} />
+                    </button>
+                </div>
+            ) : (
+                <>
+                    <div className="flex items-center gap-2">
+                        <div
+                            {...attributes}
+                            {...listeners}
+                            className="text-stone-300 hover:text-orange-400 cursor-grab active:cursor-grabbing p-1 transition-colors"
+                        >
+                            <GripVertical size={18} />
+                        </div>
+                        <span className="font-medium text-stone-700">{category.name}</span>
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => onStartEdit(category)} className="p-2 text-stone-400 hover:text-orange-500 hover:bg-orange-100 rounded-lg transition-colors">
+                            <Edit2 size={16} />
+                        </button>
+                        <button onClick={() => onDelete(category.id, category.name)} className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
+
+// ---- メインページコンポーネント ----
 const Settings = () => {
     // 食材カテゴリー
     const [categories, setCategories] = useState([]);
@@ -21,17 +104,20 @@ const Settings = () => {
     const [editingMenuId, setEditingMenuId] = useState(null);
     const [editMenuName, setEditMenuName] = useState('');
 
-    async function loadData() {
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    );
+
+    const loadData = async () => {
         const [cats, menuCats] = await Promise.all([
             getCategories(),
             getMenuCategories()
         ]);
         setCategories(cats);
         setMenuCategories(menuCats);
-    }
+    };
 
     useEffect(() => {
-        // eslint-disable-next-line
         loadData();
     }, []);
 
@@ -39,7 +125,6 @@ const Settings = () => {
     const handleAddCategory = async (e) => {
         e.preventDefault();
         if (!newCategoryName.trim()) return;
-
         await addCategory(newCategoryName.trim());
         setNewCategoryName('');
         loadData();
@@ -69,11 +154,20 @@ const Settings = () => {
         }
     };
 
+    const handleCategoryDragEnd = async (event) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = categories.findIndex(c => c.id === active.id);
+        const newIndex = categories.findIndex(c => c.id === over.id);
+        const reordered = arrayMove(categories, oldIndex, newIndex);
+        setCategories(reordered);
+        await saveCategories(reordered);
+    };
+
     // --- メニューカテゴリー処理 ---
     const handleAddMenuCategory = async (e) => {
         e.preventDefault();
         if (!newMenuCategoryName.trim()) return;
-
         await addMenuCategory(newMenuCategoryName.trim());
         setNewMenuCategoryName('');
         loadData();
@@ -101,6 +195,16 @@ const Settings = () => {
             await deleteMenuCategory(id);
             loadData();
         }
+    };
+
+    const handleMenuCategoryDragEnd = async (event) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = menuCategories.findIndex(c => c.id === active.id);
+        const newIndex = menuCategories.findIndex(c => c.id === over.id);
+        const reordered = arrayMove(menuCategories, oldIndex, newIndex);
+        setMenuCategories(reordered);
+        await saveMenuCategories(reordered);
     };
 
     return (
@@ -136,9 +240,7 @@ const Settings = () => {
                     </div>
 
                     {activeTab === 'ingredients' && (
-
                         <div className="p-6">
-                            {/* Add new category */}
                             <form onSubmit={handleAddCategory} className="flex gap-2 mb-6">
                                 <input
                                     type="text"
@@ -157,60 +259,28 @@ const Settings = () => {
                                 </button>
                             </form>
 
-                            {/* Category List */}
-                            <div className="space-y-2">
-                                {categories.map((category) => (
-                                    <div
-                                        key={category.id}
-                                        className="flex items-center justify-between p-3 rounded-xl border border-stone-100 hover:border-orange-200 hover:bg-orange-50/50 transition-colors group"
-                                    >
-                                        {editingId === category.id ? (
-                                            <div className="flex flex-1 items-center gap-2 mr-2">
-                                                <input
-                                                    type="text"
-                                                    value={editName}
-                                                    onChange={(e) => setEditName(e.target.value)}
-                                                    className="flex-1 rounded-md border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-1.5 border bg-white"
-                                                    autoFocus
-                                                />
-                                                <button
-                                                    onClick={handleSaveEdit}
-                                                    className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-md transition-colors"
-                                                >
-                                                    <Save size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={cancelEdit}
-                                                    className="p-1.5 text-stone-400 hover:bg-stone-200 rounded-md transition-colors"
-                                                >
-                                                    <X size={18} />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <span className="font-medium text-stone-700">{category.name}</span>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => startEdit(category)}
-                                                        className="p-2 text-stone-400 hover:text-orange-500 hover:bg-orange-100 rounded-lg transition-colors"
-                                                    >
-                                                        <Edit2 size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(category.id, category.name)}
-                                                        className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            </>
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
+                                <SortableContext items={categories.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                                    <div className="space-y-2">
+                                        {categories.map((category) => (
+                                            <SortableCategoryRow
+                                                key={category.id}
+                                                category={category}
+                                                editingId={editingId}
+                                                editName={editName}
+                                                onStartEdit={startEdit}
+                                                onSaveEdit={handleSaveEdit}
+                                                onCancelEdit={cancelEdit}
+                                                onDelete={handleDelete}
+                                                onEditNameChange={setEditName}
+                                            />
+                                        ))}
+                                        {categories.length === 0 && (
+                                            <p className="text-center text-stone-500 py-4">カテゴリーが登録されていません。</p>
                                         )}
                                     </div>
-                                ))}
-                                {categories.length === 0 && (
-                                    <p className="text-center text-stone-500 py-4">カテゴリーが登録されていません。</p>
-                                )}
-                            </div>
+                                </SortableContext>
+                            </DndContext>
                         </div>
                     )}
 
@@ -234,59 +304,28 @@ const Settings = () => {
                                 </button>
                             </form>
 
-                            <div className="space-y-2">
-                                {menuCategories.map((category) => (
-                                    <div
-                                        key={category.id}
-                                        className="flex items-center justify-between p-3 rounded-xl border border-stone-100 hover:border-orange-200 hover:bg-orange-50/50 transition-colors group"
-                                    >
-                                        {editingMenuId === category.id ? (
-                                            <div className="flex flex-1 items-center gap-2 mr-2">
-                                                <input
-                                                    type="text"
-                                                    value={editMenuName}
-                                                    onChange={(e) => setEditMenuName(e.target.value)}
-                                                    className="flex-1 rounded-md border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-1.5 border bg-white"
-                                                    autoFocus
-                                                />
-                                                <button
-                                                    onClick={handleSaveEditMenu}
-                                                    className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-md transition-colors"
-                                                >
-                                                    <Save size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={cancelEditMenu}
-                                                    className="p-1.5 text-stone-400 hover:bg-stone-200 rounded-md transition-colors"
-                                                >
-                                                    <X size={18} />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <span className="font-medium text-stone-700">{category.name}</span>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => startEditMenu(category)}
-                                                        className="p-2 text-stone-400 hover:text-orange-500 hover:bg-orange-100 rounded-lg transition-colors"
-                                                    >
-                                                        <Edit2 size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteMenu(category.id, category.name)}
-                                                        className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            </>
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMenuCategoryDragEnd}>
+                                <SortableContext items={menuCategories.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                                    <div className="space-y-2">
+                                        {menuCategories.map((category) => (
+                                            <SortableCategoryRow
+                                                key={category.id}
+                                                category={category}
+                                                editingId={editingMenuId}
+                                                editName={editMenuName}
+                                                onStartEdit={startEditMenu}
+                                                onSaveEdit={handleSaveEditMenu}
+                                                onCancelEdit={cancelEditMenu}
+                                                onDelete={handleDeleteMenu}
+                                                onEditNameChange={setEditMenuName}
+                                            />
+                                        ))}
+                                        {menuCategories.length === 0 && (
+                                            <p className="text-center text-stone-500 py-4">メニューカテゴリーが登録されていません。</p>
                                         )}
                                     </div>
-                                ))}
-                                {menuCategories.length === 0 && (
-                                    <p className="text-center text-stone-500 py-4">メニューカテゴリーが登録されていません。</p>
-                                )}
-                            </div>
+                                </SortableContext>
+                            </DndContext>
                         </div>
                     )}
                 </div>

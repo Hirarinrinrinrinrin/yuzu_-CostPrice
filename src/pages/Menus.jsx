@@ -1,9 +1,134 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Utensils, Image as ImageIcon, Copy, GripHorizontal } from 'lucide-react';
 import { getMenus, addMenu, updateMenu, deleteMenu, getIngredients, getMenuCategories, saveMenus } from '../lib/db';
-import { ReactSortable } from 'react-sortablejs';
+import {
+    DndContext,
+    closestCenter,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragOverlay,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    useSortable,
+    rectSortingStrategy,
+    arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import MenuForm from '../components/menus/MenuForm';
 
+// ---- ドラッグ可能なメニューカードコンポーネント ----
+const SortableMenuCard = ({ menu, ingredients, onEdit, onDuplicate, onDelete }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: menu.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+    };
+
+    const totalCost = menu.ingredients.reduce((sum, item) => {
+        const ing = ingredients.find(i => i.id === item.ingredientId);
+        if (!ing) return sum;
+        return sum + (ing.price / ing.capacity) * item.usedAmount;
+    }, 0);
+
+    let displayCost = totalCost;
+    if (menu.isPortioned) {
+        if (menu.portionType === 'cut') {
+            displayCost = menu.portionAmount > 0 ? totalCost / Number(menu.portionAmount) : 0;
+        } else if (menu.portionType === 'weight') {
+            displayCost = menu.yieldAmount > 0 ? (totalCost / Number(menu.yieldAmount)) * Number(menu.portionAmount) : 0;
+        }
+    }
+    const costRate = menu.sellingPrice > 0 ? (displayCost / menu.sellingPrice) * 100 : 0;
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden hover:shadow-md transition-shadow group flex flex-col"
+        >
+            {/* ドラッグハンドル */}
+            <div
+                {...attributes}
+                {...listeners}
+                className="h-8 bg-stone-50 border-b border-stone-100 flex items-center justify-center text-stone-300 hover:text-orange-500 hover:bg-orange-50 cursor-grab active:cursor-grabbing transition-colors"
+            >
+                <GripHorizontal size={20} />
+            </div>
+
+            <div className="h-40 bg-stone-100 relative">
+                {menu.image ? (
+                    <img src={menu.image} alt={menu.name} className="w-full h-full object-cover" />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center text-stone-300">
+                        <ImageIcon size={32} />
+                    </div>
+                )}
+                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => onEdit(menu)} className="p-1.5 bg-white text-stone-500 hover:text-orange-500 rounded-md shadow-sm transition-colors" title="編集">
+                        <Edit2 size={16} />
+                    </button>
+                    <button onClick={() => onDuplicate(menu)} className="p-1.5 bg-white text-stone-500 hover:text-green-500 rounded-md shadow-sm transition-colors" title="複製">
+                        <Copy size={16} />
+                    </button>
+                    <button onClick={() => onDelete(menu.id, menu.name)} className="p-1.5 bg-white text-stone-500 hover:text-red-500 rounded-md shadow-sm transition-colors" title="削除">
+                        <Trash2 size={16} />
+                    </button>
+                </div>
+                <div className="absolute top-3 left-3">
+                    <span className="bg-white/90 backdrop-blur text-stone-700 text-xs font-bold px-2 py-1 rounded-md shadow-sm">
+                        {menu.category}
+                    </span>
+                </div>
+            </div>
+
+            <div className="p-5 flex-1 flex flex-col">
+                <h3 className="font-bold text-lg text-stone-800 mb-1 line-clamp-1">{menu.name}</h3>
+                <p className="text-sm text-stone-500 mb-3">{menu.ingredients.length}種類の食材を使用</p>
+
+                {menu.isPortioned && (
+                    <div className="mb-4">
+                        <span className="inline-block bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-bold border border-orange-200">
+                            {menu.portionType === 'cut'
+                                ? `${menu.portionAmount}等分（カット売り）`
+                                : `${menu.portionAmount}${menu.yieldUnit}単位（量り売り）`}
+                        </span>
+                    </div>
+                )}
+
+                <div className="mt-auto pt-4 border-t border-stone-100 grid grid-cols-2 gap-4">
+                    <div>
+                        <p className="text-[10px] text-stone-400 font-medium mb-0.5">販売価格</p>
+                        <p className="font-bold text-stone-700">¥{menu.sellingPrice.toLocaleString()}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] text-stone-400 font-medium mb-0.5">
+                            {menu.isPortioned ? '販売原価 / 原価率' : '原価 / 原価率'}
+                        </p>
+                        <div className="flex items-baseline gap-1.5">
+                            <p className="font-bold text-stone-700 text-sm">¥{displayCost.toFixed(0)}</p>
+                            <p className={`text-xs font-bold ${costRate > 35 ? 'text-red-400' : 'text-emerald-500'}`}>
+                                ({costRate > 0 ? costRate.toFixed(1) : '-'}%)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ---- メインページコンポーネント ----
 const Menus = () => {
     const [menus, setMenus] = useState([]);
     const [ingredients, setIngredients] = useState([]);
@@ -11,8 +136,13 @@ const Menus = () => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [activeTab, setActiveTab] = useState('すべて');
+    const [dragActiveId, setDragActiveId] = useState(null);
 
-    async function loadData() {
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    );
+
+    const loadData = async () => {
         const [menuData, ingData, mCatsData] = await Promise.all([
             getMenus(),
             getIngredients(),
@@ -21,7 +151,7 @@ const Menus = () => {
         setMenus(menuData);
         setIngredients(ingData);
         setMenuCategories(mCatsData);
-    }
+    };
 
     useEffect(() => {
         loadData();
@@ -48,11 +178,7 @@ const Menus = () => {
     const handleDuplicate = async (item) => {
         if (window.confirm(`「${item.name}」を複製しますか？`)) {
             const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...menuDataToCopy } = item;
-            const duplicatedMenuData = {
-                ...menuDataToCopy,
-                name: `${item.name} - コピー`
-            };
-            await addMenu(duplicatedMenuData);
+            await addMenu({ ...menuDataToCopy, name: `${item.name} - コピー` });
             loadData();
         }
     };
@@ -69,50 +195,33 @@ const Menus = () => {
         setEditingItem(null);
     };
 
-    const calculateMenuStats = (menu) => {
-        const totalCost = menu.ingredients.reduce((sum, item) => {
-            const ing = ingredients.find(i => i.id === item.ingredientId);
-            if (!ing) return sum;
-            const unitPrice = ing.price / ing.capacity;
-            return sum + (unitPrice * item.usedAmount);
-        }, 0);
-
-        let displayCost = totalCost;
-        if (menu.isPortioned) {
-            if (menu.portionType === 'cut') {
-                displayCost = menu.portionAmount > 0 ? totalCost / Number(menu.portionAmount) : 0;
-            } else if (menu.portionType === 'weight') {
-                displayCost = menu.yieldAmount > 0 ? (totalCost / Number(menu.yieldAmount)) * Number(menu.portionAmount) : 0;
-            }
-        }
-
-        const costRate = menu.sellingPrice > 0 ? (displayCost / menu.sellingPrice) * 100 : 0;
-
-        return { totalCost: displayCost, costRate, originalTotalCost: totalCost };
-    };
-
     const filteredMenus = activeTab === 'すべて'
         ? menus
         : menus.filter(m => m.category === activeTab);
 
-    const handleReorder = async (newState) => {
-        // newState contains the newly ordered menus for the active tab.
-        // If nothing actually changed in length, update it.
-        if (!newState || newState.length !== filteredMenus.length) return;
+    const handleDragEnd = async (event) => {
+        const { active, over } = event;
+        setDragActiveId(null);
+        if (!over || active.id === over.id) return;
 
-        let categoryIndex = 0;
-        const newMenus = menus.map(menu => {
-            if (activeTab === 'すべて' || menu.category === activeTab) {
-                return newState[categoryIndex++];
-            }
-            return menu;
+        const oldIndex = filteredMenus.findIndex(m => m.id === active.id);
+        const newIndex = filteredMenus.findIndex(m => m.id === over.id);
+        const reorderedFiltered = arrayMove(filteredMenus, oldIndex, newIndex);
+
+        // filteredMenusの並び順をmenusに反映
+        const filteredIds = new Set(filteredMenus.map(m => m.id));
+        let fi = 0;
+        const newMenus = menus.map(m => {
+            if (filteredIds.has(m.id)) return reorderedFiltered[fi++];
+            return m;
         });
 
         const finalMenus = newMenus.map((m, index) => ({ ...m, sortOrder: index }));
-
         setMenus(finalMenus);
         await saveMenus(finalMenus);
     };
+
+    const dragActiveMenu = dragActiveId ? menus.find(m => m.id === dragActiveId) : null;
 
     return (
         <div className="flex flex-col min-h-full pb-10">
@@ -165,107 +274,47 @@ const Menus = () => {
                         />
                     )}
 
-                    {!isFormOpen && filteredMenus.length === 0 ? (
+                    {!isFormOpen && filteredMenus.length === 0 && (
                         <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-12 text-center text-stone-400">
                             <Utensils size={48} className="mx-auto mb-4 opacity-20" />
                             <p>このカテゴリーにはメニューが登録されていません。</p>
                         </div>
-                    ) : (
-                        !isFormOpen && (
-                            <ReactSortable
-                                list={filteredMenus}
-                                setList={handleReorder}
-                                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                                animation={200}
-                                handle=".drag-handle"
-                                ghostClass="opacity-40"
-                                dragClass="shadow-2xl"
-                            >
-                                {filteredMenus.map((menu) => {
-                                    const { totalCost, costRate } = calculateMenuStats(menu);
-                                    return (
-                                        <div key={menu.id} className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden hover:shadow-md transition-shadow group flex flex-col">
-                                            <div
-                                                className="drag-handle h-8 bg-stone-50 border-b border-stone-100 flex items-center justify-center text-stone-300 hover:text-orange-500 hover:bg-orange-50 cursor-grab active:cursor-grabbing transition-colors"
-                                            >
-                                                <GripHorizontal size={20} />
-                                            </div>
+                    )}
 
-                                            <div className="h-40 bg-stone-100 relative">
-                                                {menu.image ? (
-                                                    <img src={menu.image} alt={menu.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-stone-300">
-                                                        <ImageIcon size={32} />
-                                                    </div>
-                                                )}
-                                                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => handleEdit(menu)}
-                                                        className="p-1.5 bg-white text-stone-500 hover:text-orange-500 rounded-md shadow-sm transition-colors"
-                                                        title="編集"
-                                                    >
-                                                        <Edit2 size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDuplicate(menu)}
-                                                        className="p-1.5 bg-white text-stone-500 hover:text-green-500 rounded-md shadow-sm transition-colors"
-                                                        title="複製"
-                                                    >
-                                                        <Copy size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(menu.id, menu.name)}
-                                                        className="p-1.5 bg-white text-stone-500 hover:text-red-500 rounded-md shadow-sm transition-colors"
-                                                        title="削除"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                                <div className="absolute top-3 left-3">
-                                                    <span className="bg-white/90 backdrop-blur text-stone-700 text-xs font-bold px-2 py-1 rounded-md shadow-sm">
-                                                        {menu.category}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            <div className="p-5 flex-1 flex flex-col">
-                                                <h3 className="font-bold text-lg text-stone-800 mb-1 line-clamp-1">{menu.name}</h3>
-                                                <p className="text-sm text-stone-500 mb-3">{menu.ingredients.length}種類の食材を使用</p>
-
-                                                {menu.isPortioned && (
-                                                    <div className="mb-4">
-                                                        <span className="inline-block bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-bold border border-orange-200">
-                                                            {menu.portionType === 'cut'
-                                                                ? `${menu.portionAmount}等分（カット売り）`
-                                                                : `${menu.portionAmount}${menu.yieldUnit}単位（量り売り）`}
-                                                        </span>
-                                                    </div>
-                                                )}
-
-                                                <div className="mt-auto pt-4 border-t border-stone-100 grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <p className="text-[10px] text-stone-400 font-medium mb-0.5">販売価格</p>
-                                                        <p className="font-bold text-stone-700">¥{menu.sellingPrice.toLocaleString()}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[10px] text-stone-400 font-medium mb-0.5">
-                                                            {menu.isPortioned ? '販売原価 / 原価率' : '原価 / 原価率'}
-                                                        </p>
-                                                        <div className="flex items-baseline gap-1.5">
-                                                            <p className="font-bold text-stone-700 text-sm">¥{totalCost.toFixed(0)}</p>
-                                                            <p className={`text-xs font-bold ${costRate > 35 ? 'text-red-400' : 'text-emerald-500'}`}>
-                                                                ({costRate > 0 ? costRate.toFixed(1) : '-'}%)
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
+                    {!isFormOpen && filteredMenus.length > 0 && (
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragStart={({ active }) => setDragActiveId(active.id)}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <SortableContext items={filteredMenus.map(m => m.id)} strategy={rectSortingStrategy}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {filteredMenus.map((menu) => (
+                                        <SortableMenuCard
+                                            key={menu.id}
+                                            menu={menu}
+                                            ingredients={ingredients}
+                                            onEdit={handleEdit}
+                                            onDuplicate={handleDuplicate}
+                                            onDelete={handleDelete}
+                                        />
+                                    ))}
+                                </div>
+                            </SortableContext>
+                            <DragOverlay>
+                                {dragActiveMenu && (
+                                    <div className="bg-white rounded-2xl shadow-2xl border-2 border-orange-400 overflow-hidden opacity-90">
+                                        <div className="h-8 bg-orange-50 border-b border-orange-100 flex items-center justify-center text-orange-400">
+                                            <GripHorizontal size={20} />
                                         </div>
-                                    );
-                                })}
-                            </ReactSortable>
-                        )
+                                        <div className="p-5">
+                                            <p className="font-bold text-stone-800">{dragActiveMenu.name}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </DragOverlay>
+                        </DndContext>
                     )}
                 </div>
             </div>
