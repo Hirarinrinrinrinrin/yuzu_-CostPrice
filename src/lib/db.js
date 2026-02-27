@@ -18,15 +18,16 @@ export const getMenus = async () => {
     const data = await localforage.getItem(KEYS.MENUS);
     if (!data) return [];
 
-    // 既存データ（量り売り機能追加前）に対する後方互換性のため初期値を付与
-    return data.map(menu => ({
+    // 既存データ（量り売り機能追加前等）に対する後方互換性のため初期値を付与 & sortOrderでソート
+    return data.map((menu, index) => ({
         ...menu,
         isPortioned: menu.isPortioned || false, // 分配・量り売り設定トグル
         yieldAmount: menu.yieldAmount || 1, // 完成品の分量
         yieldUnit: menu.yieldUnit || '個', // 単位
         portionType: menu.portionType || 'cut', // 販売形態（'cut' or 'weight'）
         portionAmount: menu.portionAmount || 1, // カット数 or 1回あたりの提供量
-    }));
+        sortOrder: menu.sortOrder !== undefined ? menu.sortOrder : index, // ドラッグ＆ドロップ並び替え用
+    })).sort((a, b) => a.sortOrder - b.sortOrder);
 };
 
 export const saveMenus = async (menus) => {
@@ -39,6 +40,7 @@ export const addMenu = async (menu) => {
         ...menu,
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
+        sortOrder: menus.length > 0 ? Math.max(...menus.map(m => m.sortOrder || 0)) + 1 : 0,
     };
     await saveMenus([...menus, newMenu]);
     return newMenu;

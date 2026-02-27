@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Utensils, Image as ImageIcon, Copy } from 'lucide-react';
-import { getMenus, addMenu, updateMenu, deleteMenu, getIngredients, getMenuCategories } from '../lib/db';
+import { Plus, Edit2, Trash2, Utensils, Image as ImageIcon, Copy, GripHorizontal } from 'lucide-react';
+import { getMenus, addMenu, updateMenu, deleteMenu, getIngredients, getMenuCategories, saveMenus } from '../lib/db';
+import { ReactSortable } from 'react-sortablejs';
 import MenuForm from '../components/menus/MenuForm';
 
 const Menus = () => {
@@ -23,7 +24,6 @@ const Menus = () => {
     }
 
     useEffect(() => {
-        // eslint-disable-next-line
         loadData();
     }, []);
 
@@ -32,12 +32,11 @@ const Menus = () => {
     const handleSave = async (menuData) => {
         if (editingItem) {
             await updateMenu(editingItem.id, menuData);
-            setEditingItem(null);
-            setIsFormOpen(false);
         } else {
             await addMenu(menuData);
-            setIsFormOpen(false); // メニュー追加後は閉じる
         }
+        setIsFormOpen(false);
+        setEditingItem(null);
         loadData();
     };
 
@@ -96,6 +95,25 @@ const Menus = () => {
         ? menus
         : menus.filter(m => m.category === activeTab);
 
+    const handleReorder = async (newState) => {
+        // newState contains the newly ordered menus for the active tab.
+        // If nothing actually changed in length, update it.
+        if (!newState || newState.length !== filteredMenus.length) return;
+
+        let categoryIndex = 0;
+        const newMenus = menus.map(menu => {
+            if (activeTab === 'すべて' || menu.category === activeTab) {
+                return newState[categoryIndex++];
+            }
+            return menu;
+        });
+
+        const finalMenus = newMenus.map((m, index) => ({ ...m, sortOrder: index }));
+
+        setMenus(finalMenus);
+        await saveMenus(finalMenus);
+    };
+
     return (
         <div className="flex flex-col min-h-full pb-10">
             <div className="bg-theme-sidebar px-4 pt-4 lg:px-8 lg:pt-8 border-b border-stone-200 sticky top-0 z-10">
@@ -153,85 +171,101 @@ const Menus = () => {
                             <p>このカテゴリーにはメニューが登録されていません。</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {!isFormOpen && filteredMenus.map((menu) => {
-                                const { totalCost, costRate } = calculateMenuStats(menu);
-                                return (
-                                    <div key={menu.id} className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden hover:shadow-md transition-shadow group flex flex-col">
-                                        <div className="h-40 bg-stone-100 relative">
-                                            {menu.image ? (
-                                                <img src={menu.image} alt={menu.name} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-stone-300">
-                                                    <ImageIcon size={32} />
+                        !isFormOpen && (
+                            <ReactSortable
+                                list={filteredMenus}
+                                setList={handleReorder}
+                                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                                animation={200}
+                                handle=".drag-handle"
+                                ghostClass="opacity-40"
+                                dragClass="shadow-2xl"
+                            >
+                                {filteredMenus.map((menu) => {
+                                    const { totalCost, costRate } = calculateMenuStats(menu);
+                                    return (
+                                        <div key={menu.id} className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden hover:shadow-md transition-shadow group flex flex-col">
+                                            <div
+                                                className="drag-handle h-8 bg-stone-50 border-b border-stone-100 flex items-center justify-center text-stone-300 hover:text-orange-500 hover:bg-orange-50 cursor-grab active:cursor-grabbing transition-colors"
+                                            >
+                                                <GripHorizontal size={20} />
+                                            </div>
+
+                                            <div className="h-40 bg-stone-100 relative">
+                                                {menu.image ? (
+                                                    <img src={menu.image} alt={menu.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-stone-300">
+                                                        <ImageIcon size={32} />
+                                                    </div>
+                                                )}
+                                                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => handleEdit(menu)}
+                                                        className="p-1.5 bg-white text-stone-500 hover:text-orange-500 rounded-md shadow-sm transition-colors"
+                                                        title="編集"
+                                                    >
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDuplicate(menu)}
+                                                        className="p-1.5 bg-white text-stone-500 hover:text-green-500 rounded-md shadow-sm transition-colors"
+                                                        title="複製"
+                                                    >
+                                                        <Copy size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(menu.id, menu.name)}
+                                                        className="p-1.5 bg-white text-stone-500 hover:text-red-500 rounded-md shadow-sm transition-colors"
+                                                        title="削除"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
                                                 </div>
-                                            )}
-                                            <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => handleEdit(menu)}
-                                                    className="p-1.5 bg-white text-stone-500 hover:text-orange-500 rounded-md shadow-sm transition-colors"
-                                                    title="編集"
-                                                >
-                                                    <Edit2 size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDuplicate(menu)}
-                                                    className="p-1.5 bg-white text-stone-500 hover:text-green-500 rounded-md shadow-sm transition-colors"
-                                                    title="複製"
-                                                >
-                                                    <Copy size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(menu.id, menu.name)}
-                                                    className="p-1.5 bg-white text-stone-500 hover:text-red-500 rounded-md shadow-sm transition-colors"
-                                                    title="削除"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                            <div className="absolute top-3 left-3">
-                                                <span className="bg-white/90 backdrop-blur text-stone-700 text-xs font-bold px-2 py-1 rounded-md shadow-sm">
-                                                    {menu.category}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        <div className="p-5 flex-1 flex flex-col">
-                                            <h3 className="font-bold text-lg text-stone-800 mb-1 line-clamp-1">{menu.name}</h3>
-                                            <p className="text-sm text-stone-500 mb-3">{menu.ingredients.length}種類の食材を使用</p>
-
-                                            {menu.isPortioned && (
-                                                <div className="mb-4">
-                                                    <span className="inline-block bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-bold border border-orange-200">
-                                                        {menu.portionType === 'cut'
-                                                            ? `${menu.portionAmount}等分（カット売り）`
-                                                            : `${menu.portionAmount}${menu.yieldUnit}単位（量り売り）`}
+                                                <div className="absolute top-3 left-3">
+                                                    <span className="bg-white/90 backdrop-blur text-stone-700 text-xs font-bold px-2 py-1 rounded-md shadow-sm">
+                                                        {menu.category}
                                                     </span>
                                                 </div>
-                                            )}
+                                            </div>
 
-                                            <div className="mt-auto pt-4 border-t border-stone-100 grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <p className="text-[10px] text-stone-400 font-medium mb-0.5">販売価格</p>
-                                                    <p className="font-bold text-stone-700">¥{menu.sellingPrice.toLocaleString()}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] text-stone-400 font-medium mb-0.5">
-                                                        {menu.isPortioned ? '販売原価 / 原価率' : '原価 / 原価率'}
-                                                    </p>
-                                                    <div className="flex items-baseline gap-1.5">
-                                                        <p className="font-bold text-stone-700 text-sm">¥{totalCost.toFixed(0)}</p>
-                                                        <p className={`text-xs font-bold ${costRate > 35 ? 'text-red-400' : 'text-emerald-500'}`}>
-                                                            ({costRate > 0 ? costRate.toFixed(1) : '-'}%)
+                                            <div className="p-5 flex-1 flex flex-col">
+                                                <h3 className="font-bold text-lg text-stone-800 mb-1 line-clamp-1">{menu.name}</h3>
+                                                <p className="text-sm text-stone-500 mb-3">{menu.ingredients.length}種類の食材を使用</p>
+
+                                                {menu.isPortioned && (
+                                                    <div className="mb-4">
+                                                        <span className="inline-block bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-bold border border-orange-200">
+                                                            {menu.portionType === 'cut'
+                                                                ? `${menu.portionAmount}等分（カット売り）`
+                                                                : `${menu.portionAmount}${menu.yieldUnit}単位（量り売り）`}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                <div className="mt-auto pt-4 border-t border-stone-100 grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <p className="text-[10px] text-stone-400 font-medium mb-0.5">販売価格</p>
+                                                        <p className="font-bold text-stone-700">¥{menu.sellingPrice.toLocaleString()}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] text-stone-400 font-medium mb-0.5">
+                                                            {menu.isPortioned ? '販売原価 / 原価率' : '原価 / 原価率'}
                                                         </p>
+                                                        <div className="flex items-baseline gap-1.5">
+                                                            <p className="font-bold text-stone-700 text-sm">¥{totalCost.toFixed(0)}</p>
+                                                            <p className={`text-xs font-bold ${costRate > 35 ? 'text-red-400' : 'text-emerald-500'}`}>
+                                                                ({costRate > 0 ? costRate.toFixed(1) : '-'}%)
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                    );
+                                })}
+                            </ReactSortable>
+                        )
                     )}
                 </div>
             </div>
