@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Cost Manager</title>
+    <script>
+        // GitHub Pages SPA リダイレクト用スクリプト
+        // リロード時の404をindex.htmlに転送し、URLを復元する
+        var l = window.location;
+        l.replace(
+            l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+            l.pathname.split('/').slice(0, 2).join('/') +
+            '/?p=' + encodeURIComponent(l.pathname.slice(1) + (l.search ? '&q=' + encodeURIComponent(l.search.slice(1)) : '') + l.hash)
+        );
+    </script>
+</head>
+
+<body></body>
+
+</html>

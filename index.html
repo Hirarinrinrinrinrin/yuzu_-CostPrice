@@ -3,6 +3,21 @@
 
 <head>
   <meta charset="UTF-8" />
+  <script>
+    // GitHub Pages SPA: 404.htmlから渡されたURLを復元する
+    (function () {
+      var p = window.location.search.slice(1);
+      if (p && p.indexOf('p=') === 0) {
+        var decoded = decodeURIComponent(p.slice(2));
+        var qIndex = decoded.indexOf('&q=');
+        var path = qIndex !== -1 ? decoded.slice(0, qIndex) : decoded;
+        var query = qIndex !== -1 ? '?' + decodeURIComponent(decoded.slice(qIndex + 3)) : '';
+        window.history.replaceState(null, null,
+          '/' + path + query + window.location.hash
+        );
+      }
+    })();
+  </script>
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
