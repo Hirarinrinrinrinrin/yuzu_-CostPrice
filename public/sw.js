@@ -1,8 +1,8 @@
 // Cost Manager - Service Worker
 const CACHE_NAME = 'cost-manager-v1';
 const STATIC_ASSETS = [
-    '/',
-    '/index.html',
+    '/yuzu_-CostPrice/',
+    '/yuzu_-CostPrice/index.html',
 ];
 
 // Install: キャッシュに基本アセットを格納
