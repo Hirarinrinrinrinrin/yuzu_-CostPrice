@@ -6,7 +6,7 @@ import Settings from './pages/Settings'
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/yuzu_-CostPrice">
       <Routes>
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Navigate to="/menus" replace />} />
