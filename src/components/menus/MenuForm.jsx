@@ -69,16 +69,37 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
         }));
     };
 
-    // 画像アップロード処理（今回はBase64のURLとして保存する簡易実装）
+    // 画像アップロード処理（Canvas APIでリサイズ・圧縮してからBase64保存）
     const handleImageChange = (e) => {
         const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setFormData(prev => ({ ...prev, image: reader.result }));
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX_SIZE = 800;
+                let { width, height } = img;
+
+                // アスペクト比を維持しながら最大800pxにリサイズ
+                if (width > height) {
+                    if (width > MAX_SIZE) { height = Math.round(height * MAX_SIZE / width); width = MAX_SIZE; }
+                } else {
+                    if (height > MAX_SIZE) { width = Math.round(width * MAX_SIZE / height); height = MAX_SIZE; }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+                // JPEG品質70%で圧縮（スマホ写真 3〜15MB → 約100〜200KB）
+                const compressed = canvas.toDataURL('image/jpeg', 0.7);
+                setFormData(prev => ({ ...prev, image: compressed }));
             };
-            reader.readAsDataURL(file);
-        }
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
     };
 
     // リアルタイム計算
