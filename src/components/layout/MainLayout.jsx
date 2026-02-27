@@ -29,7 +29,7 @@ const MainLayout = () => {
                     }`}
             >
                 <div className="flex h-16 items-center justify-between px-6 border-b border-stone-200/50">
-                    <span className="text-xl font-bold tracking-tight text-stone-800">Yuzu Cost</span>
+                    <span className="text-xl font-bold tracking-tight text-stone-800">Cost Manage</span>
                     <button onClick={closeSidebar} className="lg:hidden text-stone-500 hover:text-stone-800">
                         <X size={24} />
                     </button>
@@ -65,7 +65,7 @@ const MainLayout = () => {
                     >
                         <Menu size={24} />
                     </button>
-                    <span className="text-lg font-bold text-stone-800">Yuzu Cost</span>
+                    <span className="text-lg font-bold text-stone-800">Cost Manage</span>
                     <div className="w-6" /> {/* Spacer for centering */}
                 </header>
 

@@ -5,6 +5,8 @@ import {
     DndContext,
     closestCenter,
     PointerSensor,
+    TouchSensor,
+    MouseSensor,
     useSensor,
     useSensors,
     DragOverlay,
@@ -139,7 +141,8 @@ const Menus = () => {
     const [dragActiveId, setDragActiveId] = useState(null);
 
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+        useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
     );
 
     const loadData = async () => {
