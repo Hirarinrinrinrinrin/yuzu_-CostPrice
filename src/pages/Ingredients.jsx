@@ -9,6 +9,7 @@ const Ingredients = () => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [activeTab, setActiveTab] = useState('すべて');
+    const [toast, setToast] = useState(null); // { message, type }
 
     const loadData = async () => {
         const [ingData, catData] = await Promise.all([getIngredients(), getCategories()]);
@@ -21,13 +22,20 @@ const Ingredients = () => {
         loadData();
     }, []);
 
+    const showToast = (message) => {
+        setToast(message);
+        setTimeout(() => setToast(null), 2500);
+    };
+
     const handleSave = async (ingredientData) => {
         if (editingItem) {
             await updateIngredient(editingItem.id, ingredientData);
             setEditingItem(null);
-            setIsFormOpen(false); // 編集時は閉じる
+            setIsFormOpen(false);
+            showToast(`「${ingredientData.name}」を更新しました`);
         } else {
             await addIngredient(ingredientData);
+            showToast(`「${ingredientData.name}」を登録しました ✓`);
             // 新規時は連続登録のためフォームは開いたまま（フォーム内で名前だけクリアする）
         }
         loadData();
@@ -73,6 +81,12 @@ const Ingredients = () => {
 
     return (
         <div className="flex flex-col min-h-full pb-10">
+            {/* トースト通知 */}
+            {toast && (
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg font-medium text-sm animate-bounce-in flex items-center gap-2">
+                    <span>✓</span> {toast}
+                </div>
+            )}
             <div className="bg-theme-sidebar px-4 pt-4 lg:px-8 lg:pt-8 border-b border-stone-200 sticky top-0 z-10">
                 <div className="max-w-5xl mx-auto">
                     <nav className="-mb-px flex space-x-6 overflow-x-auto no-scrollbar">
