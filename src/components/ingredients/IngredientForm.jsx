@@ -125,7 +125,7 @@ const IngredientForm = ({ initialData, onSave, onCancel }) => {
                                 type="number"
                                 name="price"
                                 min="0"
-                                step="0.1"
+                                step="0.01"
                                 value={formData.price}
                                 onChange={handleChange}
                                 placeholder="0"
@@ -143,7 +143,7 @@ const IngredientForm = ({ initialData, onSave, onCancel }) => {
                                 type="number"
                                 name="capacity"
                                 min="0.1"
-                                step="0.1"
+                                step="0.01"
                                 value={formData.capacity}
                                 onChange={handleChange}
                                 placeholder="0"

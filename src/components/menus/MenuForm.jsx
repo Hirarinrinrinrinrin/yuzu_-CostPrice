@@ -278,7 +278,7 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                                                 type="number"
                                                 name="yieldAmount"
                                                 min="0.1"
-                                                step="0.1"
+                                                step="0.01"
                                                 value={formData.yieldAmount}
                                                 onChange={handleChange}
                                                 className="flex-1 rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
@@ -317,7 +317,7 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                                                     type="number"
                                                     name="portionAmount"
                                                     min="0.1"
-                                                    step="0.1"
+                                                    step="0.01"
                                                     value={formData.portionAmount}
                                                     onChange={handleChange}
                                                     className="w-full rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
@@ -380,7 +380,7 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                                                         <input
                                                             type="number"
                                                             min="0.1"
-                                                            step="0.1"
+                                                            step="0.01"
                                                             value={item.usedAmount}
                                                             onChange={(e) => handleIngredientChange(item.tempId, 'usedAmount', e.target.value)}
                                                             placeholder="使用量"
