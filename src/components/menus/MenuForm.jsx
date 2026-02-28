@@ -1,5 +1,91 @@
-import React, { useState, useEffect } from 'react';
-import { X, Save, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Save, Plus, Trash2, Image as ImageIcon, Search } from 'lucide-react';
+
+// ---- 食材オートコンプリートコンポーネント ----
+const IngredientAutocomplete = ({ value, availableIngredients, onChange }) => {
+    const [query, setQuery] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef(null);
+
+    // 選択済みの食材名を表示
+    const selectedIngredient = availableIngredients.find(i => i.id === value);
+
+    useEffect(() => {
+        if (selectedIngredient) {
+            setQuery(selectedIngredient.name);
+        }
+    }, [value, selectedIngredient]);
+
+    // 外側クリックで候補を閉じる
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+                setIsOpen(false);
+                if (selectedIngredient) setQuery(selectedIngredient.name);
+                else setQuery('');
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [selectedIngredient]);
+
+    const filtered = availableIngredients.filter(ing =>
+        ing.name.toLowerCase().includes(query.toLowerCase())
+    );
+
+    const handleSelect = (ing) => {
+        onChange(ing.id);
+        setQuery(ing.name);
+        setIsOpen(false);
+    };
+
+    const handleInputChange = (e) => {
+        setQuery(e.target.value);
+        setIsOpen(true);
+        if (!e.target.value) onChange('');
+    };
+
+    const handleFocus = () => {
+        setIsOpen(true);
+        setQuery('');
+    };
+
+    return (
+        <div ref={wrapperRef} className="relative">
+            <div className="relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                    type="text"
+                    value={query}
+                    onChange={handleInputChange}
+                    onFocus={handleFocus}
+                    placeholder="食材名を入力..."
+                    className="w-full text-sm rounded-md border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 pl-8 border bg-white"
+                />
+            </div>
+            {isOpen && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filtered.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-stone-400">該当する食材がありません</div>
+                    ) : (
+                        filtered.map(ing => (
+                            <button
+                                key={ing.id}
+                                type="button"
+                                onClick={() => handleSelect(ing)}
+                                className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors flex justify-between items-center ${ing.id === value ? 'bg-orange-50 text-orange-700 font-medium' : 'text-stone-700'
+                                    }`}
+                            >
+                                <span>{ing.name}</span>
+                                <span className="text-xs text-stone-400 ml-2">¥{ing.price}/{ing.capacity}{ing.unit}</span>
+                            </button>
+                        ))
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCancel }) => {
     const defaultCategory = categories.length > 0 ? categories[0].name : '';
@@ -363,18 +449,11 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                                     return (
                                         <div key={item.tempId} className="flex items-start gap-2 p-3 bg-stone-50 rounded-lg border border-stone-200">
                                             <div className="flex-1 space-y-2">
-                                                <select
+                                                <IngredientAutocomplete
                                                     value={item.ingredientId}
-                                                    onChange={(e) => handleIngredientChange(item.tempId, 'ingredientId', e.target.value)}
-                                                    className="w-full text-sm rounded-md border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white"
-                                                >
-                                                    <option value="">食材を選択...</option>
-                                                    {availableIngredients.map(ing => (
-                                                        <option key={ing.id} value={ing.id}>
-                                                            {ing.name} (¥{ing.price}/{ing.capacity}{ing.unit})
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                    availableIngredients={availableIngredients}
+                                                    onChange={(id) => handleIngredientChange(item.tempId, 'ingredientId', id)}
+                                                />
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <input
