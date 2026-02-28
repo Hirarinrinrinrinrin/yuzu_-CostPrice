@@ -1,5 +1,5 @@
 // Cost Manager - Service Worker
-const CACHE_NAME = 'cost-manager-v4';
+const CACHE_NAME = 'cost-manager-v5';
 const STATIC_ASSETS = [
     '/yuzu_-CostPrice/',
     '/yuzu_-CostPrice/index.html',
