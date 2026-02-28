@@ -212,7 +212,7 @@ const Settings = () => {
 
     return (
         <div className="p-4 lg:p-8">
-            <div className="max-w-5xl mx-auto space-y-8">
+            <div className="w-full space-y-8">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-stone-800">設定</h1>
                     <p className="text-stone-500 mt-2">食材に紐付けるカテゴリーやアプリの基本設定を行います。</p>

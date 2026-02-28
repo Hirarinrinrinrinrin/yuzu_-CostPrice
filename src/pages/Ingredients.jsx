@@ -88,7 +88,7 @@ const Ingredients = () => {
                 </div>
             )}
             <div className="bg-theme-sidebar px-4 pt-4 lg:px-8 lg:pt-8 border-b border-stone-200 sticky top-0 z-10">
-                <div className="max-w-5xl mx-auto">
+                <div className="w-full">
                     <nav className="-mb-px flex space-x-6 overflow-x-auto no-scrollbar">
                         {TABS.map((tab) => {
                             const count = tab === 'すべて'
@@ -119,7 +119,7 @@ const Ingredients = () => {
             </div>
 
             <div className="flex-1 p-4 lg:p-8">
-                <div className="max-w-5xl mx-auto space-y-6">
+                <div className="w-full space-y-6">
                     <div className="flex items-center justify-between">
                         <h1 className="text-2xl font-bold tracking-tight text-stone-800">食材管理</h1>
                         {!isFormOpen && (
