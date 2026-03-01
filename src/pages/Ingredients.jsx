@@ -121,7 +121,7 @@ const Ingredients = () => {
             <div className="flex-1 p-4 lg:p-8">
                 <div className="w-full space-y-6">
                     <div className="flex items-center justify-between">
-                        <h1 className="text-2xl font-bold tracking-tight text-stone-800">食材管理</h1>
+                        <h1 className="text-2xl font-bold tracking-tight text-stone-800">調達食材管理</h1>
                         {!isFormOpen && (
                             <button
                                 onClick={() => setIsFormOpen(true)}
