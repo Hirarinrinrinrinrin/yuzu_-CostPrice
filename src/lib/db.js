@@ -291,3 +291,53 @@ export const deletePrepCategory = async (id) => {
     const categories = await getPrepCategories();
     await savePrepCategories(categories.filter((c) => c.id !== id));
 };
+
+// --- Data Export / Import (バックアップ・復元) ---
+export const exportAllData = async () => {
+    const [ingredients, prepIngredients, menus, categories, menuCategories, prepCategories] = await Promise.all([
+        localforage.getItem(KEYS.INGREDIENTS),
+        localforage.getItem(KEYS.PREP_INGREDIENTS),
+        localforage.getItem(KEYS.MENUS),
+        localforage.getItem(KEYS.CATEGORIES),
+        localforage.getItem(KEYS.MENU_CATEGORIES),
+        localforage.getItem(KEYS.PREP_CATEGORIES),
+    ]);
+
+    // メニューの画像データを除外したコピーを作成
+    const menusWithoutImages = (menus || []).map(m => {
+        const { image, ...rest } = m;
+        return rest;
+    });
+
+    return {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        data: {
+            ingredients: ingredients || [],
+            prepIngredients: prepIngredients || [],
+            menus: menusWithoutImages,
+            categories: categories || [],
+            menuCategories: menuCategories || [],
+            prepCategories: prepCategories || [],
+        }
+    };
+};
+
+export const importAllData = async (jsonData) => {
+    if (!jsonData || !jsonData.data) {
+        throw new Error('無効なバックアップファイルです');
+    }
+
+    const d = jsonData.data;
+
+    const saves = [];
+    if (d.ingredients) saves.push(localforage.setItem(KEYS.INGREDIENTS, d.ingredients));
+    if (d.prepIngredients) saves.push(localforage.setItem(KEYS.PREP_INGREDIENTS, d.prepIngredients));
+    if (d.menus) saves.push(localforage.setItem(KEYS.MENUS, d.menus));
+    if (d.categories) saves.push(localforage.setItem(KEYS.CATEGORIES, d.categories));
+    if (d.menuCategories) saves.push(localforage.setItem(KEYS.MENU_CATEGORIES, d.menuCategories));
+    if (d.prepCategories) saves.push(localforage.setItem(KEYS.PREP_CATEGORIES, d.prepCategories));
+
+    await Promise.all(saves);
+    return true;
+};

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Save, X, GripVertical } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, Edit2, Save, X, GripVertical, Download, Upload, AlertTriangle } from 'lucide-react';
 import {
     getCategories, addCategory, updateCategory, deleteCategory, saveCategories,
     getMenuCategories, addMenuCategory, updateMenuCategory, deleteMenuCategory, saveMenuCategories,
-    getPrepCategories, addPrepCategory, updatePrepCategory, deletePrepCategory, savePrepCategories
+    getPrepCategories, addPrepCategory, updatePrepCategory, deletePrepCategory, savePrepCategories,
+    exportAllData, importAllData
 } from '../lib/db';
 import {
     DndContext,
@@ -262,6 +263,56 @@ const Settings = () => {
         await savePrepCategories(reordered);
     };
 
+    // --- バックアップ・復元処理 ---
+    const fileInputRef = useRef(null);
+    const [backupToast, setBackupToast] = useState(null);
+
+    const showBackupToast = (message, type = 'success') => {
+        setBackupToast({ message, type });
+        setTimeout(() => setBackupToast(null), 4000);
+    };
+
+    const handleExport = async () => {
+        try {
+            const data = await exportAllData();
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const date = new Date().toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `cost-manage-backup-${date}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showBackupToast('✓ バックアップファイルをダウンロードしました');
+        } catch (err) {
+            showBackupToast('エクスポートに失敗しました: ' + err.message, 'error');
+        }
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!window.confirm('現在のデータは上書きされます。\nバックアップファイルから復元してもよろしいですか？')) {
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
+        try {
+            const text = await file.text();
+            const jsonData = JSON.parse(text);
+            await importAllData(jsonData);
+            showBackupToast('✓ データを復元しました。ページをリロードしてください。');
+            loadData();
+        } catch (err) {
+            showBackupToast('復元に失敗しました: 無効なファイルです', 'error');
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
     return (
         <div className="p-4 lg:p-8">
             <div className="w-full space-y-8">
@@ -437,6 +488,69 @@ const Settings = () => {
                             </DndContext>
                         </div>
                     )}
+                </div>
+
+                {/* バックアップ・復元セクション */}
+                <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-stone-100 bg-stone-50/50">
+                        <h2 className="font-bold text-stone-800">データのバックアップ・復元</h2>
+                        <p className="text-sm text-stone-500 mt-1">機種変更時などにデータを移行できます（画像は含まれません）</p>
+                    </div>
+                    <div className="p-6 space-y-6">
+                        {/* エクスポート */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                            <div>
+                                <h3 className="font-bold text-stone-800 flex items-center gap-2">
+                                    <Download size={18} className="text-emerald-600" />
+                                    バックアップ（エクスポート）
+                                </h3>
+                                <p className="text-sm text-stone-500 mt-1">現在の登録データをJSONファイルとして保存します</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleExport}
+                                className="flex items-center bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm whitespace-nowrap"
+                            >
+                                <Download size={18} className="mr-2" />
+                                データを保存
+                            </button>
+                        </div>
+
+                        {/* インポート */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-amber-50 rounded-xl border border-amber-200">
+                            <div>
+                                <h3 className="font-bold text-stone-800 flex items-center gap-2">
+                                    <Upload size={18} className="text-amber-600" />
+                                    復元（インポート）
+                                </h3>
+                                <p className="text-sm text-stone-500 mt-1">バックアップファイルからデータを復元します</p>
+                                <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
+                                    <AlertTriangle size={12} />
+                                    現在のデータは上書きされます
+                                </p>
+                            </div>
+                            <label className="flex items-center bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm cursor-pointer whitespace-nowrap">
+                                <Upload size={18} className="mr-2" />
+                                ファイルを選択
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".json"
+                                    onChange={handleImport}
+                                    className="hidden"
+                                />
+                            </label>
+                        </div>
+
+                        {/* トースト */}
+                        {backupToast && (
+                            <div className={`p-3 rounded-lg text-sm font-medium text-center ${backupToast.type === 'success' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                : 'bg-red-100 text-red-700 border border-red-200'
+                                }`}>
+                                {backupToast.message}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
