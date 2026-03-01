@@ -1,53 +1,56 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, Plus, Trash2, Image as ImageIcon, Search } from 'lucide-react';
+import { X, Save, Plus, Trash2, Image as ImageIcon, Search, ChefHat } from 'lucide-react';
 
-// ---- 食材オートコンプリートコンポーネント ----
-const IngredientAutocomplete = ({ value, availableIngredients, onChange }) => {
+// ---- 統合オートコンプリート（調達食材 + 仕込食材） ----
+const UnifiedAutocomplete = ({ value, availableIngredients, prepIngredients, onChange }) => {
     const [query, setQuery] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const wrapperRef = useRef(null);
 
-    // 選択済みの食材名を表示
-    const selectedIngredient = availableIngredients.find(i => i.id === value);
+    // 統合リスト作成
+    const allItems = [
+        ...availableIngredients.map(i => ({
+            id: i.id,
+            name: i.name,
+            type: 'ingredient',
+            detail: `¥${i.price}/${i.capacity}${i.unit}`,
+            unit: i.unit,
+        })),
+        ...prepIngredients.map(p => ({
+            id: `prep:${p.id}`,
+            name: p.name,
+            type: 'prep',
+            detail: `${p.yieldAmount}${p.yieldUnit}`,
+            unit: p.yieldUnit,
+        })),
+    ];
+
+    const selectedItem = allItems.find(i => i.id === value);
 
     useEffect(() => {
-        if (selectedIngredient) {
-            setQuery(selectedIngredient.name);
-        }
-    }, [value, selectedIngredient]);
+        if (selectedItem) setQuery(selectedItem.name);
+    }, [value, selectedItem]);
 
-    // 外側クリックで候補を閉じる
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
                 setIsOpen(false);
-                if (selectedIngredient) setQuery(selectedIngredient.name);
+                if (selectedItem) setQuery(selectedItem.name);
                 else setQuery('');
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [selectedIngredient]);
+    }, [selectedItem]);
 
-    const filtered = availableIngredients.filter(ing =>
-        ing.name.toLowerCase().includes(query.toLowerCase())
+    const filtered = allItems.filter(item =>
+        item.name.toLowerCase().includes(query.toLowerCase())
     );
 
-    const handleSelect = (ing) => {
-        onChange(ing.id);
-        setQuery(ing.name);
+    const handleSelect = (item) => {
+        onChange(item.id);
+        setQuery(item.name);
         setIsOpen(false);
-    };
-
-    const handleInputChange = (e) => {
-        setQuery(e.target.value);
-        setIsOpen(true);
-        if (!e.target.value) onChange('');
-    };
-
-    const handleFocus = () => {
-        setIsOpen(true);
-        setQuery('');
     };
 
     return (
@@ -57,8 +60,8 @@ const IngredientAutocomplete = ({ value, availableIngredients, onChange }) => {
                 <input
                     type="text"
                     value={query}
-                    onChange={handleInputChange}
-                    onFocus={handleFocus}
+                    onChange={(e) => { setQuery(e.target.value); setIsOpen(true); if (!e.target.value) onChange(''); }}
+                    onFocus={() => { setIsOpen(true); setQuery(''); }}
                     placeholder="食材名を入力..."
                     className="w-full text-sm rounded-md border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 pl-8 border bg-white"
                 />
@@ -68,16 +71,20 @@ const IngredientAutocomplete = ({ value, availableIngredients, onChange }) => {
                     {filtered.length === 0 ? (
                         <div className="px-3 py-2 text-sm text-stone-400">該当する食材がありません</div>
                     ) : (
-                        filtered.map(ing => (
+                        filtered.map(item => (
                             <button
-                                key={ing.id}
+                                key={item.id}
                                 type="button"
-                                onClick={() => handleSelect(ing)}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors flex justify-between items-center ${ing.id === value ? 'bg-orange-50 text-orange-700 font-medium' : 'text-stone-700'
+                                onClick={() => handleSelect(item)}
+                                className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors flex justify-between items-center ${item.id === value ? 'bg-orange-50 text-orange-700 font-medium' : 'text-stone-700'
                                     }`}
                             >
-                                <span>{ing.name}</span>
-                                <span className="text-xs text-stone-400 ml-2">¥{ing.price}/{ing.capacity}{ing.unit}</span>
+                                <span className="flex items-center gap-1.5">
+                                    {item.type === 'prep' && <ChefHat size={12} className="text-orange-400" />}
+                                    {item.name}
+                                    {item.type === 'prep' && <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold">仕込</span>}
+                                </span>
+                                <span className="text-xs text-stone-400 ml-2">{item.detail}</span>
                             </button>
                         ))
                     )}
@@ -87,7 +94,7 @@ const IngredientAutocomplete = ({ value, availableIngredients, onChange }) => {
     );
 };
 
-const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCancel }) => {
+const MenuForm = ({ initialData, availableIngredients, prepIngredients = [], categories, onSave, onCancel }) => {
     const defaultCategory = categories.length > 0 ? categories[0].name : '';
 
     const [formData, setFormData] = useState({
@@ -95,17 +102,11 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
         category: defaultCategory,
         sellingPrice: '',
         image: '',
-        menuIngredients: [], // { tempId: string, ingredientId: string, usedAmount: number|string }
-        isPortioned: false,
-        yieldAmount: 1,
-        yieldUnit: '人前',
-        portionType: 'cut',
-        portionAmount: 1,
+        menuIngredients: [], // { tempId, ingredientId, usedAmount }
     });
 
     useEffect(() => {
         if (initialData) {
-            // eslint-disable-next-line
             setFormData({
                 name: initialData.name || '',
                 category: initialData.category || defaultCategory,
@@ -115,11 +116,6 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                     ...i,
                     tempId: crypto.randomUUID()
                 })) : [],
-                isPortioned: initialData.isPortioned || false,
-                yieldAmount: initialData.yieldAmount || 1,
-                yieldUnit: initialData.yieldUnit || '人前',
-                portionType: initialData.portionType || 'cut',
-                portionAmount: initialData.portionAmount || 1,
             });
         }
     }, [initialData, defaultCategory]);
@@ -155,7 +151,7 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
         }));
     };
 
-    // 画像アップロード処理（Canvas APIでリサイズ・圧縮してからBase64保存）
+    // 画像アップロード処理
     const handleImageChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -166,20 +162,15 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
             img.onload = () => {
                 const MAX_SIZE = 800;
                 let { width, height } = img;
-
-                // アスペクト比を維持しながら最大800pxにリサイズ
                 if (width > height) {
                     if (width > MAX_SIZE) { height = Math.round(height * MAX_SIZE / width); width = MAX_SIZE; }
                 } else {
                     if (height > MAX_SIZE) { width = Math.round(width * MAX_SIZE / height); height = MAX_SIZE; }
                 }
-
                 const canvas = document.createElement('canvas');
                 canvas.width = width;
                 canvas.height = height;
                 canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-
-                // JPEG品質70%で圧縮（スマホ写真 3〜15MB → 約100〜200KB）
                 const compressed = canvas.toDataURL('image/jpeg', 0.7);
                 setFormData(prev => ({ ...prev, image: compressed }));
             };
@@ -188,33 +179,44 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
         reader.readAsDataURL(file);
     };
 
-    // リアルタイム計算
+    // 食材の単価を取得するヘルパー
+    const getItemInfo = (ingredientId) => {
+        // 仕込食材の場合 (prep:xxxの形式)
+        if (ingredientId.startsWith('prep:')) {
+            const prepId = ingredientId.replace('prep:', '');
+            const prep = prepIngredients.find(p => p.id === prepId);
+            if (!prep) return null;
+            // 仕込食材の原価を計算
+            const prepCost = prep.ingredients.reduce((sum, item) => {
+                const ing = availableIngredients.find(i => i.id === item.ingredientId);
+                if (!ing) return sum;
+                return sum + (ing.price / ing.capacity) * item.usedAmount;
+            }, 0);
+            const unitPrice = prep.yieldAmount > 0 ? prepCost / prep.yieldAmount : 0;
+            return { unitPrice, unit: prep.yieldUnit, name: prep.name, type: 'prep' };
+        }
+        // 調達食材の場合
+        const ing = availableIngredients.find(i => i.id === ingredientId);
+        if (!ing) return null;
+        return { unitPrice: ing.price / ing.capacity, unit: ing.unit, name: ing.name, type: 'ingredient' };
+    };
+
+    // リアルタイム原価計算
     const totalCost = formData.menuIngredients.reduce((sum, item) => {
-        const ingredient = availableIngredients.find(i => i.id === item.ingredientId);
-        if (!ingredient || !item.usedAmount) return sum;
-        const unitPrice = ingredient.price / ingredient.capacity;
-        return sum + (unitPrice * Number(item.usedAmount));
+        if (!item.ingredientId || !item.usedAmount) return sum;
+        const info = getItemInfo(item.ingredientId);
+        if (!info) return sum;
+        return sum + info.unitPrice * Number(item.usedAmount);
     }, 0);
 
-    // 分配・量り売り計算
-    let displayCost = totalCost;
-    if (formData.isPortioned) {
-        if (formData.portionType === 'cut') {
-            displayCost = formData.portionAmount > 0 ? totalCost / Number(formData.portionAmount) : 0;
-        } else if (formData.portionType === 'weight') {
-            displayCost = formData.yieldAmount > 0 ? (totalCost / Number(formData.yieldAmount)) * Number(formData.portionAmount) : 0;
-        }
-    }
-
     const costRate = Number(formData.sellingPrice) > 0
-        ? (displayCost / Number(formData.sellingPrice)) * 100
+        ? (totalCost / Number(formData.sellingPrice)) * 100
         : 0;
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!formData.name) return;
 
-        // Filter out incomplete ingredients
         const validIngredients = formData.menuIngredients
             .filter(i => i.ingredientId && i.usedAmount)
             .map(i => ({
@@ -228,11 +230,6 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
             sellingPrice: Number(formData.sellingPrice) || 0,
             image: formData.image,
             ingredients: validIngredients,
-            isPortioned: formData.isPortioned,
-            yieldAmount: Number(formData.yieldAmount),
-            yieldUnit: formData.yieldUnit,
-            portionType: formData.portionType,
-            portionAmount: Number(formData.portionAmount),
         });
     };
 
@@ -253,7 +250,7 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                     <div className="space-y-6">
                         <h4 className="font-medium text-stone-800 border-b border-stone-100 pb-2">基本情報</h4>
 
-                        {/* 商品画像（左上に大きく配置） */}
+                        {/* 商品画像 */}
                         <div>
                             <label className="block text-sm font-medium text-stone-700 mb-2">商品画像</label>
                             <div className="flex flex-col sm:flex-row items-start sm:items-end gap-6">
@@ -334,89 +331,6 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                                 </div>
                             </div>
                         </div>
-
-                        {/* 分配・量り売り設定（トグルスイッチ） */}
-                        <div className="bg-stone-50 rounded-xl p-4 border border-stone-200 shadow-sm mt-6 mb-2">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h5 className="font-bold text-stone-800 text-sm">分配・量り売り設定</h5>
-                                    <p className="text-xs text-stone-500 mt-0.5">ホールケーキのカット売りに便利</p>
-                                </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        name="isPortioned"
-                                        checked={formData.isPortioned}
-                                        onChange={(e) => setFormData(p => ({ ...p, isPortioned: e.target.checked }))}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
-                                </label>
-                            </div>
-
-                            {formData.isPortioned && (
-                                <div className="mt-5 space-y-4 pt-4 border-t border-stone-200 animate-in fade-in slide-in-from-top-2 duration-200">
-                                    {/* 【Step 2】完成品の分量設定 */}
-                                    <div>
-                                        <label className="block text-xs font-bold text-stone-700 mb-1">① 完成品の分量（全体量）</label>
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="number"
-                                                name="yieldAmount"
-                                                min="0.1"
-                                                step="0.01"
-                                                value={formData.yieldAmount}
-                                                onChange={handleChange}
-                                                className="flex-1 rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
-                                            />
-                                            <select
-                                                name="yieldUnit"
-                                                value={formData.yieldUnit}
-                                                onChange={handleChange}
-                                                className="w-24 font-medium rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
-                                            >
-                                                {['人前', 'g', 'ml'].map(u => <option key={u} value={u}>{u}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    {/* 【Step 3 & 4】販売形態と分割計算 */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-xs font-bold text-stone-700 mb-1">② 販売形態</label>
-                                            <select
-                                                name="portionType"
-                                                value={formData.portionType}
-                                                onChange={handleChange}
-                                                className="w-full font-medium rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
-                                            >
-                                                <option value="cut">カット等分</option>
-                                                <option value="weight">量り売り</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-stone-700 mb-1">
-                                                {formData.portionType === 'cut' ? '③ カット数（等分）' : `③ 販売単位`}
-                                            </label>
-                                            <div className="flex gap-2 items-center">
-                                                <input
-                                                    type="number"
-                                                    name="portionAmount"
-                                                    min="0.1"
-                                                    step="0.01"
-                                                    value={formData.portionAmount}
-                                                    onChange={handleChange}
-                                                    className="w-full rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2 border bg-white text-sm"
-                                                />
-                                                <span className="text-sm font-medium text-stone-500 whitespace-nowrap min-w-[24px]">
-                                                    {formData.portionType === 'cut' ? '等分' : formData.yieldUnit}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
                     </div>
 
                     {/* 右カラム：構成食材 */}
@@ -433,32 +347,37 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                             </button>
                         </div>
 
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                             {formData.menuIngredients.length === 0 ? (
                                 <p className="text-sm text-stone-400 text-center py-8 bg-stone-50 rounded-lg border border-dashed border-stone-200">
-                                    使用する食材を追加してください
+                                    使用する食材を追加してください<br />
+                                    <span className="text-xs">調達食材・仕込食材の両方から選択できます</span>
                                 </p>
                             ) : (
                                 formData.menuIngredients.map((item) => {
-                                    const selectedIngredient = availableIngredients.find(i => i.id === item.ingredientId);
-                                    const unit = selectedIngredient ? selectedIngredient.unit : '';
-                                    const cost = selectedIngredient && item.usedAmount
-                                        ? ((selectedIngredient.price / selectedIngredient.capacity) * Number(item.usedAmount)).toFixed(2)
+                                    const info = item.ingredientId ? getItemInfo(item.ingredientId) : null;
+                                    const unit = info ? info.unit : '';
+                                    const cost = info && item.usedAmount
+                                        ? (info.unitPrice * Number(item.usedAmount)).toFixed(2)
                                         : 0;
 
                                     return (
-                                        <div key={item.tempId} className="flex items-start gap-2 p-3 bg-stone-50 rounded-lg border border-stone-200">
+                                        <div key={item.tempId} className={`flex items-start gap-2 p-3 rounded-lg border ${info?.type === 'prep'
+                                                ? 'bg-orange-50/50 border-orange-200'
+                                                : 'bg-stone-50 border-stone-200'
+                                            }`}>
                                             <div className="flex-1 space-y-2">
-                                                <IngredientAutocomplete
+                                                <UnifiedAutocomplete
                                                     value={item.ingredientId}
                                                     availableIngredients={availableIngredients}
+                                                    prepIngredients={prepIngredients}
                                                     onChange={(id) => handleIngredientChange(item.tempId, 'ingredientId', id)}
                                                 />
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <input
                                                             type="number"
-                                                            min="0.1"
+                                                            min="0.01"
                                                             step="0.01"
                                                             value={item.usedAmount}
                                                             onChange={(e) => handleIngredientChange(item.tempId, 'usedAmount', e.target.value)}
@@ -492,25 +411,9 @@ const MenuForm = ({ initialData, availableIngredients, categories, onSave, onCan
                     <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
                         <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
                             <div>
-                                <div className="text-xs text-stone-500 mb-1">
-                                    {formData.isPortioned ? '完成品 全体原価' : '原価合計'}
-                                </div>
+                                <div className="text-xs text-stone-500 mb-1">原価合計</div>
                                 <div className="text-2xl font-bold text-stone-800">¥{totalCost.toFixed(2)}</div>
                             </div>
-
-                            {formData.isPortioned && (
-                                <>
-                                    <div className="hidden sm:block h-10 w-px bg-stone-300"></div>
-                                    <div className="bg-orange-100 rounded-lg p-2 px-3 border border-orange-200 shadow-sm">
-                                        <div className="text-[10px] text-orange-800 mb-0.5 font-bold">
-                                            {formData.portionType === 'cut'
-                                                ? `1カットあたりの原価 (${formData.portionAmount}等分)`
-                                                : `量り売り原価 (${formData.portionAmount}${formData.yieldUnit}あたり)`}
-                                        </div>
-                                        <div className="text-xl font-bold text-orange-600">¥{displayCost.toFixed(2)}</div>
-                                    </div>
-                                </>
-                            )}
 
                             <div className="hidden sm:block h-10 w-px bg-stone-300"></div>
 

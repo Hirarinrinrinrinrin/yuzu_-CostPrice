@@ -8,6 +8,7 @@ localforage.config({
 
 const KEYS = {
     INGREDIENTS: 'ingredients',
+    PREP_INGREDIENTS: 'prepIngredients',
     MENUS: 'menus',
     CATEGORIES: 'categories',
     MENU_CATEGORIES: 'menuCategories',
@@ -201,4 +202,45 @@ export const updateIngredient = async (id, updates) => {
 export const deleteIngredient = async (id) => {
     const ingredients = await getIngredients();
     await saveIngredients(ingredients.filter((i) => i.id !== id));
+};
+
+// --- Prep Ingredients (仕込食材) ---
+export const getPrepIngredients = async () => {
+    const data = await localforage.getItem(KEYS.PREP_INGREDIENTS);
+    return data || [];
+};
+
+export const savePrepIngredients = async (prepIngredients) => {
+    await localforage.setItem(KEYS.PREP_INGREDIENTS, prepIngredients);
+};
+
+export const addPrepIngredient = async (prepIngredient) => {
+    const items = await getPrepIngredients();
+    const newItem = {
+        ...prepIngredient,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+    };
+    await savePrepIngredients([...items, newItem]);
+    return newItem;
+};
+
+export const updatePrepIngredient = async (id, updates) => {
+    const items = await getPrepIngredients();
+    const index = items.findIndex((i) => i.id === id);
+    if (index !== -1) {
+        items[index] = {
+            ...items[index],
+            ...updates,
+            updatedAt: new Date().toISOString()
+        };
+        await savePrepIngredients(items);
+        return items[index];
+    }
+    return null;
+};
+
+export const deletePrepIngredient = async (id) => {
+    const items = await getPrepIngredients();
+    await savePrepIngredients(items.filter((i) => i.id !== id));
 };

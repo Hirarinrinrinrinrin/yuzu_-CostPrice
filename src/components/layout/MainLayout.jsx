@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Utensils, Calculator, Settings, Menu, X } from 'lucide-react';
+import { Utensils, ChefHat, Calculator, Settings, Menu, X } from 'lucide-react';
 
 const MainLayout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const navigation = [
         { name: '原価管理', to: '/menus', icon: Calculator },
-        { name: '食材管理', to: '/ingredients', icon: Utensils },
+        { name: '調達食材管理', to: '/ingredients', icon: Utensils },
+        { name: '仕込食材管理', to: '/prep', icon: ChefHat },
         { name: '設定', to: '/settings', icon: Settings },
     ];
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Utensils, Image as ImageIcon, Copy, GripHorizontal } from 'lucide-react';
-import { getMenus, addMenu, updateMenu, deleteMenu, getIngredients, getMenuCategories, saveMenus } from '../lib/db';
+import { Plus, Edit2, Trash2, Utensils, Image as ImageIcon, Copy, GripHorizontal, ChefHat } from 'lucide-react';
+import { getMenus, addMenu, updateMenu, deleteMenu, getIngredients, getPrepIngredients, getMenuCategories, saveMenus } from '../lib/db';
 import {
     DndContext,
     closestCenter,
@@ -21,7 +21,7 @@ import { CSS } from '@dnd-kit/utilities';
 import MenuForm from '../components/menus/MenuForm';
 
 // ---- ドラッグ可能なメニューカードコンポーネント ----
-const SortableMenuCard = ({ menu, ingredients, onEdit, onDuplicate, onDelete }) => {
+const SortableMenuCard = ({ menu, ingredients, prepIngredients, onEdit, onDuplicate, onDelete }) => {
     const {
         attributes,
         listeners,
@@ -37,21 +37,29 @@ const SortableMenuCard = ({ menu, ingredients, onEdit, onDuplicate, onDelete }) 
         opacity: isDragging ? 0.4 : 1,
     };
 
+    // 原価計算（調達食材＋仕込食材対応）
+    const getUnitPrice = (ingredientId) => {
+        if (ingredientId.startsWith('prep:')) {
+            const prepId = ingredientId.replace('prep:', '');
+            const prep = prepIngredients.find(p => p.id === prepId);
+            if (!prep) return 0;
+            const prepCost = prep.ingredients.reduce((s, pi) => {
+                const ing = ingredients.find(i => i.id === pi.ingredientId);
+                if (!ing) return s;
+                return s + (ing.price / ing.capacity) * pi.usedAmount;
+            }, 0);
+            return prep.yieldAmount > 0 ? prepCost / prep.yieldAmount : 0;
+        }
+        const ing = ingredients.find(i => i.id === ingredientId);
+        if (!ing) return 0;
+        return ing.price / ing.capacity;
+    };
+
     const totalCost = menu.ingredients.reduce((sum, item) => {
-        const ing = ingredients.find(i => i.id === item.ingredientId);
-        if (!ing) return sum;
-        return sum + (ing.price / ing.capacity) * item.usedAmount;
+        return sum + getUnitPrice(item.ingredientId) * item.usedAmount;
     }, 0);
 
-    let displayCost = totalCost;
-    if (menu.isPortioned) {
-        if (menu.portionType === 'cut') {
-            displayCost = menu.portionAmount > 0 ? totalCost / Number(menu.portionAmount) : 0;
-        } else if (menu.portionType === 'weight') {
-            displayCost = menu.yieldAmount > 0 ? (totalCost / Number(menu.yieldAmount)) * Number(menu.portionAmount) : 0;
-        }
-    }
-    const costRate = menu.sellingPrice > 0 ? (displayCost / menu.sellingPrice) * 100 : 0;
+    const costRate = menu.sellingPrice > 0 ? (totalCost / menu.sellingPrice) * 100 : 0;
 
     return (
         <div
@@ -98,27 +106,15 @@ const SortableMenuCard = ({ menu, ingredients, onEdit, onDuplicate, onDelete }) 
                 <h3 className="font-bold text-lg text-stone-800 mb-1 line-clamp-1">{menu.name}</h3>
                 <p className="text-sm text-stone-500 mb-3">{menu.ingredients.length}種類の食材を使用</p>
 
-                {menu.isPortioned && (
-                    <div className="mb-4">
-                        <span className="inline-block bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-bold border border-orange-200">
-                            {menu.portionType === 'cut'
-                                ? `${menu.portionAmount}等分（カット売り）`
-                                : `${menu.portionAmount}${menu.yieldUnit}単位（量り売り）`}
-                        </span>
-                    </div>
-                )}
-
                 <div className="mt-auto pt-4 border-t border-stone-100 grid grid-cols-2 gap-4">
                     <div>
                         <p className="text-[10px] text-stone-400 font-medium mb-0.5">販売価格</p>
                         <p className="font-bold text-stone-700">¥{menu.sellingPrice.toLocaleString()}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] text-stone-400 font-medium mb-0.5">
-                            {menu.isPortioned ? '販売原価 / 原価率' : '原価 / 原価率'}
-                        </p>
+                        <p className="text-[10px] text-stone-400 font-medium mb-0.5">原価 / 原価率</p>
                         <div className="flex items-baseline gap-1.5">
-                            <p className="font-bold text-stone-700 text-sm">¥{displayCost.toFixed(0)}</p>
+                            <p className="font-bold text-stone-700 text-sm">¥{totalCost.toFixed(0)}</p>
                             <p className={`text-xs font-bold ${costRate > 35 ? 'text-red-400' : 'text-emerald-500'}`}>
                                 ({costRate > 0 ? costRate.toFixed(1) : '-'}%)
                             </p>
@@ -134,6 +130,7 @@ const SortableMenuCard = ({ menu, ingredients, onEdit, onDuplicate, onDelete }) 
 const Menus = () => {
     const [menus, setMenus] = useState([]);
     const [ingredients, setIngredients] = useState([]);
+    const [prepIngredients, setPrepIngredients] = useState([]);
     const [menuCategories, setMenuCategories] = useState([]);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -146,13 +143,15 @@ const Menus = () => {
     );
 
     const loadData = async () => {
-        const [menuData, ingData, mCatsData] = await Promise.all([
+        const [menuData, ingData, prepData, mCatsData] = await Promise.all([
             getMenus(),
             getIngredients(),
+            getPrepIngredients(),
             getMenuCategories()
         ]);
         setMenus(menuData);
         setIngredients(ingData);
+        setPrepIngredients(prepData);
         setMenuCategories(mCatsData);
     };
 
@@ -271,6 +270,7 @@ const Menus = () => {
                         <MenuForm
                             initialData={editingItem}
                             availableIngredients={ingredients}
+                            prepIngredients={prepIngredients}
                             categories={menuCategories}
                             onSave={handleSave}
                             onCancel={handleCancelForm}
@@ -298,6 +298,7 @@ const Menus = () => {
                                             key={menu.id}
                                             menu={menu}
                                             ingredients={ingredients}
+                                            prepIngredients={prepIngredients}
                                             onEdit={handleEdit}
                                             onDuplicate={handleDuplicate}
                                             onDelete={handleDelete}
