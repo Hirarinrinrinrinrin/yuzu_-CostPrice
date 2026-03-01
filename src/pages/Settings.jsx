@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, Save, X, GripVertical } from 'lucide-react';
 import {
     getCategories, addCategory, updateCategory, deleteCategory, saveCategories,
-    getMenuCategories, addMenuCategory, updateMenuCategory, deleteMenuCategory, saveMenuCategories
+    getMenuCategories, addMenuCategory, updateMenuCategory, deleteMenuCategory, saveMenuCategories,
+    getPrepCategories, addPrepCategory, updatePrepCategory, deletePrepCategory, savePrepCategories
 } from '../lib/db';
 import {
     DndContext,
@@ -106,18 +107,26 @@ const Settings = () => {
     const [editingMenuId, setEditingMenuId] = useState(null);
     const [editMenuName, setEditMenuName] = useState('');
 
+    // 仕込食材カテゴリー
+    const [prepCategories, setPrepCategories] = useState([]);
+    const [newPrepCategoryName, setNewPrepCategoryName] = useState('');
+    const [editingPrepId, setEditingPrepId] = useState(null);
+    const [editPrepName, setEditPrepName] = useState('');
+
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
         useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
     );
 
     const loadData = async () => {
-        const [cats, menuCats] = await Promise.all([
+        const [cats, menuCats, prepCats] = await Promise.all([
             getCategories(),
-            getMenuCategories()
+            getMenuCategories(),
+            getPrepCategories()
         ]);
         setCategories(cats);
         setMenuCategories(menuCats);
+        setPrepCategories(prepCats);
     };
 
     useEffect(() => {
@@ -210,6 +219,49 @@ const Settings = () => {
         await saveMenuCategories(reordered);
     };
 
+    // --- 仕込食材カテゴリー処理 ---
+    const handleAddPrepCategory = async (e) => {
+        e.preventDefault();
+        if (!newPrepCategoryName.trim()) return;
+        await addPrepCategory(newPrepCategoryName.trim());
+        setNewPrepCategoryName('');
+        loadData();
+    };
+
+    const startEditPrep = (category) => {
+        setEditingPrepId(category.id);
+        setEditPrepName(category.name);
+    };
+
+    const cancelEditPrep = () => {
+        setEditingPrepId(null);
+        setEditPrepName('');
+    };
+
+    const handleSaveEditPrep = async () => {
+        if (!editPrepName.trim()) return;
+        await updatePrepCategory(editingPrepId, editPrepName.trim());
+        setEditingPrepId(null);
+        loadData();
+    };
+
+    const handleDeletePrep = async (id, name) => {
+        if (window.confirm(`仕込食材カテゴリー「${name}」を削除してもよろしいですか？`)) {
+            await deletePrepCategory(id);
+            loadData();
+        }
+    };
+
+    const handlePrepCategoryDragEnd = async (event) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = prepCategories.findIndex(c => c.id === active.id);
+        const newIndex = prepCategories.findIndex(c => c.id === over.id);
+        const reordered = arrayMove(prepCategories, oldIndex, newIndex);
+        setPrepCategories(reordered);
+        await savePrepCategories(reordered);
+    };
+
     return (
         <div className="p-4 lg:p-8">
             <div className="w-full space-y-8">
@@ -220,24 +272,33 @@ const Settings = () => {
 
                 <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
                     <div className="border-b border-stone-200 bg-stone-50/50">
-                        <nav className="flex -mb-px">
+                        <nav className="flex -mb-px overflow-x-auto no-scrollbar">
                             <button
                                 onClick={() => setActiveTab('ingredients')}
-                                className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm transition-colors ${activeTab === 'ingredients'
+                                className={`flex-1 min-w-0 py-4 px-1 text-center border-b-2 font-medium text-sm transition-colors ${activeTab === 'ingredients'
                                     ? 'border-orange-500 text-orange-600 bg-white'
                                     : 'border-transparent text-stone-500 hover:text-stone-700 hover:bg-stone-50'
                                     }`}
                             >
-                                食材カテゴリー管理
+                                調達食材
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('prep')}
+                                className={`flex-1 min-w-0 py-4 px-1 text-center border-b-2 font-medium text-sm transition-colors ${activeTab === 'prep'
+                                    ? 'border-orange-500 text-orange-600 bg-white'
+                                    : 'border-transparent text-stone-500 hover:text-stone-700 hover:bg-stone-50'
+                                    }`}
+                            >
+                                仕込食材
                             </button>
                             <button
                                 onClick={() => setActiveTab('menus')}
-                                className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm transition-colors ${activeTab === 'menus'
+                                className={`flex-1 min-w-0 py-4 px-1 text-center border-b-2 font-medium text-sm transition-colors ${activeTab === 'menus'
                                     ? 'border-orange-500 text-orange-600 bg-white'
                                     : 'border-transparent text-stone-500 hover:text-stone-700 hover:bg-stone-50'
                                     }`}
                             >
-                                メニューカテゴリー管理
+                                メニュー
                             </button>
                         </nav>
                     </div>
@@ -325,6 +386,51 @@ const Settings = () => {
                                         ))}
                                         {menuCategories.length === 0 && (
                                             <p className="text-center text-stone-500 py-4">メニューカテゴリーが登録されていません。</p>
+                                        )}
+                                    </div>
+                                </SortableContext>
+                            </DndContext>
+                        </div>
+                    )}
+
+                    {activeTab === 'prep' && (
+                        <div className="p-6">
+                            <form onSubmit={handleAddPrepCategory} className="flex gap-2 mb-6">
+                                <input
+                                    type="text"
+                                    value={newPrepCategoryName}
+                                    onChange={(e) => setNewPrepCategoryName(e.target.value)}
+                                    placeholder="新しいカテゴリー名を追加"
+                                    className="flex-1 rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2.5 border bg-white"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={!newPrepCategoryName.trim()}
+                                    className="flex items-center bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
+                                >
+                                    <Plus size={18} className="mr-1" />
+                                    追加
+                                </button>
+                            </form>
+
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePrepCategoryDragEnd}>
+                                <SortableContext items={prepCategories.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                                    <div className="space-y-2">
+                                        {prepCategories.map((category) => (
+                                            <SortableCategoryRow
+                                                key={category.id}
+                                                category={category}
+                                                editingId={editingPrepId}
+                                                editName={editPrepName}
+                                                onStartEdit={startEditPrep}
+                                                onSaveEdit={handleSaveEditPrep}
+                                                onCancelEdit={cancelEditPrep}
+                                                onDelete={handleDeletePrep}
+                                                onEditNameChange={setEditPrepName}
+                                            />
+                                        ))}
+                                        {prepCategories.length === 0 && (
+                                            <p className="text-center text-stone-500 py-4">仕込食材カテゴリーが登録されていません。</p>
                                         )}
                                     </div>
                                 </SortableContext>

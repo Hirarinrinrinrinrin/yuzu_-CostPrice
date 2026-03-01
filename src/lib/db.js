@@ -9,6 +9,7 @@ localforage.config({
 const KEYS = {
     INGREDIENTS: 'ingredients',
     PREP_INGREDIENTS: 'prepIngredients',
+    PREP_CATEGORIES: 'prepCategories',
     MENUS: 'menus',
     CATEGORIES: 'categories',
     MENU_CATEGORIES: 'menuCategories',
@@ -243,4 +244,50 @@ export const updatePrepIngredient = async (id, updates) => {
 export const deletePrepIngredient = async (id) => {
     const items = await getPrepIngredients();
     await savePrepIngredients(items.filter((i) => i.id !== id));
+};
+
+// --- Prep Categories (仕込食材カテゴリー) ---
+export const getPrepCategories = async () => {
+    const data = await localforage.getItem(KEYS.PREP_CATEGORIES);
+    if (!data || data.length === 0) {
+        const defaults = [
+            { id: 'pcat-1', name: 'ソース', createdAt: new Date().toISOString() },
+            { id: 'pcat-2', name: 'スープ', createdAt: new Date().toISOString() },
+            { id: 'pcat-3', name: 'その他', createdAt: new Date().toISOString() },
+        ];
+        await savePrepCategories(defaults);
+        return defaults;
+    }
+    return data;
+};
+
+export const savePrepCategories = async (categories) => {
+    await localforage.setItem(KEYS.PREP_CATEGORIES, categories);
+};
+
+export const addPrepCategory = async (name) => {
+    const categories = await getPrepCategories();
+    const newCategory = {
+        id: crypto.randomUUID(),
+        name,
+        createdAt: new Date().toISOString(),
+    };
+    await savePrepCategories([...categories, newCategory]);
+    return newCategory;
+};
+
+export const updatePrepCategory = async (id, name) => {
+    const categories = await getPrepCategories();
+    const index = categories.findIndex((c) => c.id === id);
+    if (index !== -1) {
+        categories[index] = { ...categories[index], name };
+        await savePrepCategories(categories);
+        return categories[index];
+    }
+    return null;
+};
+
+export const deletePrepCategory = async (id) => {
+    const categories = await getPrepCategories();
+    await savePrepCategories(categories.filter((c) => c.id !== id));
 };

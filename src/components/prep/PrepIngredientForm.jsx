@@ -73,9 +73,12 @@ const IngredientAutocomplete = ({ value, availableIngredients, onChange }) => {
 };
 
 // ---- メインフォーム ----
-const PrepIngredientForm = ({ initialData, availableIngredients, onSave, onCancel }) => {
+const PrepIngredientForm = ({ initialData, availableIngredients, categories = [], onSave, onCancel }) => {
+    const defaultCategory = categories.length > 0 ? categories[0].name : '';
+
     const [formData, setFormData] = useState({
         name: '',
+        category: defaultCategory,
         yieldAmount: '',
         yieldUnit: 'g',
         ingredients: [],
@@ -85,6 +88,7 @@ const PrepIngredientForm = ({ initialData, availableIngredients, onSave, onCance
         if (initialData) {
             setFormData({
                 name: initialData.name || '',
+                category: initialData.category || defaultCategory,
                 yieldAmount: initialData.yieldAmount || '',
                 yieldUnit: initialData.yieldUnit || 'g',
                 ingredients: initialData.ingredients ? initialData.ingredients.map(i => ({
@@ -93,7 +97,7 @@ const PrepIngredientForm = ({ initialData, availableIngredients, onSave, onCance
                 })) : [],
             });
         }
-    }, [initialData]);
+    }, [initialData, defaultCategory]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -145,6 +149,7 @@ const PrepIngredientForm = ({ initialData, availableIngredients, onSave, onCance
 
         onSave({
             name: formData.name,
+            category: formData.category,
             yieldAmount: Number(formData.yieldAmount) || 0,
             yieldUnit: formData.yieldUnit,
             ingredients: validIngredients,
@@ -179,6 +184,21 @@ const PrepIngredientForm = ({ initialData, availableIngredients, onSave, onCance
                                 required
                             />
                         </div>
+                        {categories.length > 0 && (
+                            <div>
+                                <label className="block text-sm font-medium text-stone-700 mb-1">カテゴリー</label>
+                                <select
+                                    name="category"
+                                    value={formData.category}
+                                    onChange={handleChange}
+                                    className="w-full rounded-lg border-stone-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-stone-800 p-2.5 border bg-white"
+                                >
+                                    {categories.map(c => (
+                                        <option key={c.id} value={c.name}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                         <div>
                             <label className="block text-sm font-medium text-stone-700 mb-1">完成量</label>
                             <div className="flex gap-2">

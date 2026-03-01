@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Package, Copy, ChefHat } from 'lucide-react';
-import { getPrepIngredients, addPrepIngredient, updatePrepIngredient, deletePrepIngredient, getIngredients } from '../lib/db';
+import { getPrepIngredients, addPrepIngredient, updatePrepIngredient, deletePrepIngredient, getIngredients, getPrepCategories } from '../lib/db';
 import PrepIngredientForm from '../components/prep/PrepIngredientForm';
 
 const PrepIngredients = () => {
     const [prepIngredients, setPrepIngredients] = useState([]);
     const [ingredients, setIngredients] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [toast, setToast] = useState(null);
+    const [activeTab, setActiveTab] = useState('すべて');
 
     const loadData = async () => {
-        const [prepData, ingData] = await Promise.all([getPrepIngredients(), getIngredients()]);
+        const [prepData, ingData, catData] = await Promise.all([getPrepIngredients(), getIngredients(), getPrepCategories()]);
         setPrepIngredients(prepData);
         setIngredients(ingData);
+        setCategories(catData);
     };
 
     useEffect(() => {
@@ -72,6 +75,12 @@ const PrepIngredients = () => {
         }, 0);
     };
 
+    // フィルタリング
+    const TABS = ['すべて', ...categories.map(c => c.name)];
+    const filteredItems = activeTab === 'すべて'
+        ? prepIngredients
+        : prepIngredients.filter(item => item.category === activeTab);
+
     return (
         <div className="flex flex-col min-h-full pb-10">
             {/* トースト通知 */}
@@ -80,6 +89,29 @@ const PrepIngredients = () => {
                     <span>✓</span> {toast}
                 </div>
             )}
+
+            {/* カテゴリータブ */}
+            <div className="bg-theme-sidebar px-4 pt-4 lg:px-8 lg:pt-8 border-b border-stone-200 sticky top-0 z-10">
+                <div className="w-full">
+                    <nav className="-mb-px flex space-x-6 overflow-x-auto no-scrollbar">
+                        {TABS.map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab
+                                    ? 'border-orange-500 text-orange-600'
+                                    : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
+                                    }`}
+                            >
+                                {tab}
+                                <span className="ml-2 py-0.5 px-2 bg-stone-100 text-stone-500 rounded-full text-xs">
+                                    {tab === 'すべて' ? prepIngredients.length : prepIngredients.filter(i => i.category === tab).length}
+                                </span>
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+            </div>
 
             <div className="flex-1 p-4 lg:p-8">
                 <div className="w-full space-y-6">
@@ -100,13 +132,14 @@ const PrepIngredients = () => {
                         <PrepIngredientForm
                             initialData={editingItem}
                             availableIngredients={ingredients}
+                            categories={categories}
                             onSave={handleSave}
                             onCancel={handleCancelForm}
                         />
                     )}
 
                     <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
-                        {prepIngredients.length === 0 ? (
+                        {filteredItems.length === 0 ? (
                             <div className="text-center py-16 text-stone-400">
                                 <ChefHat size={48} className="mx-auto mb-4 opacity-20" />
                                 <p>仕込食材が登録されていません。</p>
@@ -126,7 +159,7 @@ const PrepIngredients = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-stone-100">
-                                        {prepIngredients.map((item) => {
+                                        {filteredItems.map((item) => {
                                             const totalCost = calcCost(item);
                                             const unitCost = item.yieldAmount > 0 ? totalCost / item.yieldAmount : 0;
                                             return (
